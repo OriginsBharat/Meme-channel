@@ -1,0 +1,6 @@
+praw
+moviepy==1.0.3
+pyttsx3
+pytesseract
+Pillow
+pyinstaller
