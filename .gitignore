@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Test and temporary files
+test_assets/
+temp_media/
+*.mp4
+*.mp3
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mov
+*.avi
+*.log
