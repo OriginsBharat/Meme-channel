@@ -1,27 +1,40 @@
-import pytesseract
+import easyocr
 import pyttsx3
 import os
-from PIL import Image
 
-def is_tesseract_installed():
-    """Checks if the Tesseract command is available."""
-    try:
-        pytesseract.get_tesseract_version()
-        print("Tesseract is installed and accessible.")
-        return True
-    except pytesseract.TesseractNotFoundError:
-        print("Tesseract Not Found: OCR functionality will not work.")
-        print("Please install Tesseract from https://github.com/tesseract-ocr/tesseract and ensure it's in your PATH.")
-        return False
+# --- OCR Model Initialization ---
+# This is done once when the module is imported. It can take a moment
+# as it loads the deep learning model into memory.
+print("Initializing OCR engine (easyocr)... This may take a moment.")
+try:
+    reader = easyocr.Reader(['en'])
+    print("OCR engine initialized successfully.")
+except Exception as e:
+    print(f"CRITICAL: Could not initialize OCR engine. Text extraction will not work. Error: {e}")
+    reader = None
 
 def extract_text_from_image(image_path):
-    """Extracts text from an image file using Tesseract OCR."""
+    """
+    Extracts text from an image file using EasyOCR.
+
+    Args:
+        image_path (str): The path to the image file.
+
+    Returns:
+        A string containing the extracted text, or an empty string if no text is found or an error occurs.
+    """
+    if not reader:
+        print("OCR reader not available.")
+        return ""
+
     try:
-        text = pytesseract.image_to_string(Image.open(image_path))
+        # The 'detail=0' parameter returns a list of strings directly.
+        result = reader.readtext(image_path, detail=0, paragraph=True)
+        text = " ".join(result)
         print(f"Extracted text: '{text.strip()}'")
         return text.strip()
     except Exception as e:
-        print(f"An error occurred during OCR: {e}")
+        print(f"An error occurred during OCR with easyocr: {e}")
         return ""
 
 def get_available_voices():
@@ -34,10 +47,10 @@ def get_available_voices():
     try:
         engine = pyttsx3.init()
         voices = engine.getProperty('voices')
-        engine.stop() # Stop engine after getting properties
+        engine.stop()
         voice_dict = {}
         for i, voice in enumerate(voices):
-            gender = "Female" if "female" in voice.gender.lower() else "Male"
+            gender = "Female" if hasattr(voice, 'gender') and voice.gender and "female" in voice.gender.lower() else "Male"
             name = f"Voice {i} ({voice.name}, {gender})"
             voice_dict[name] = voice.id
         return voice_dict
@@ -68,7 +81,7 @@ def generate_tts_audio(text, output_path, voice_id=None):
             engine.setProperty('voice', voice_id)
 
         engine.save_to_file(text, output_path)
-        engine.runAndWait() # Process the command queue
+        engine.runAndWait()
         engine.stop()
         print(f"TTS audio saved to {output_path}")
         return True
