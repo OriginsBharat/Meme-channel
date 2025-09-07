@@ -33,17 +33,18 @@ class MemeCompilerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Meme Video Compiler")
-        self.geometry("1200x800") # Increased width for preview
+        self.geometry("1200x800")
 
         # --- Class Attributes ---
         self.found_memes = []
+        self.meme_widgets = {} # To hold checkbox vars and labels
         self.intro_path = tk.StringVar()
         self.outro_path = tk.StringVar()
         self.background_path = tk.StringVar()
         self.tts_enabled_var = tk.BooleanVar(value=True)
         self.voices_map = get_available_voices()
         self.selected_voice_name = tk.StringVar()
-        self.preview_image = None # To hold a reference to the PhotoImage
+        self.preview_image = None
 
         # --- Style Configuration ---
         self.style = ttk.Style(self)
@@ -57,8 +58,9 @@ class MemeCompilerApp(tk.Tk):
         self.style.configure("TEntry", fieldbackground="#4a2a6f", foreground=TEXT_COLOR, insertcolor=PRIMARY_COLOR)
         self.style.configure("TLabelframe", background=BG_SECONDARY, bordercolor=PRIMARY_COLOR, relief=tk.RIDGE)
         self.style.configure("TLabelframe.Label", background=BG_SECONDARY, foreground=PRIMARY_COLOR, font=(FONT_NAME, 12, "bold"))
-        self.style.configure("TCheckbutton", background=BG_SECONDARY, indicatorcolor=PRIMARY_COLOR)
-        self.style.map("TCheckbutton", indicatorcolor=[('selected', SECONDARY_COLOR)])
+        self.style.configure("TCheckbutton", background=BG_SECONDARY, foreground=TEXT_COLOR)
+        self.style.map("TCheckbutton", indicatorcolor=[('active', SECONDARY_COLOR), ('selected', PRIMARY_COLOR)])
+        self.style.configure("Url.TLabel", foreground="#d0a0ff", font=(FONT_NAME, 11, 'underline'))
 
         self.configure(bg=BG_COLOR)
         self.create_widgets()
@@ -73,7 +75,6 @@ class MemeCompilerApp(tk.Tk):
         # --- Step 1: Search ---
         search_group = ttk.LabelFrame(self.main_frame, text="Step 1: Find Memes", padding="10")
         search_group.pack(fill=tk.X, pady=5, padx=10)
-
         keyword_frame = ttk.Frame(search_group, style="TLabelframe")
         keyword_frame.pack(fill=tk.X)
         ttk.Label(keyword_frame, text="Keyword:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
@@ -83,31 +84,28 @@ class MemeCompilerApp(tk.Tk):
         self.search_button.pack(side=tk.RIGHT, padx=(10, 0))
 
         # --- Step 2: Select Memes (Initially Hidden) ---
-        self.results_group = ttk.LabelFrame(self.main_frame, text="Step 2: Select Your Memes", padding="10")
-
-        # PanedWindow to allow resizing between list and preview
+        self.results_group = ttk.LabelFrame(self.main_frame, text="Step 2: Select Memes (Click text to preview)", padding="10")
         paned_window = ttk.PanedWindow(self.results_group, orient=tk.HORIZONTAL)
         paned_window.pack(fill=tk.BOTH, expand=True)
 
-        # Left pane: Listbox
-        list_frame = ttk.Frame(paned_window, width=400)
-        self.results_listbox = tk.Listbox(list_frame, bg="#333", fg=TEXT_COLOR, selectbackground=SECONDARY_COLOR, height=15, selectmode=tk.MULTIPLE, relief=tk.FLAT)
-        self.results_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.results_listbox.yview)
-        self.results_listbox.config(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.results_listbox.bind('<<ListboxSelect>>', self.on_meme_select)
-        paned_window.add(list_frame, weight=1)
+        # Left pane: Scrollable Checkbox List
+        list_canvas = tk.Canvas(paned_window, bg=BG_SECONDARY, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(paned_window, orient="vertical", command=list_canvas.yview)
+        self.meme_list_frame = ttk.Frame(list_canvas, style="TLabelframe")
+        self.meme_list_frame.bind("<Configure>", lambda e: list_canvas.configure(scrollregion=list_canvas.bbox("all")))
+        list_canvas.create_window((0, 0), window=self.meme_list_frame, anchor="nw")
+        list_canvas.configure(yscrollcommand=scrollbar.set)
+        paned_window.add(list_canvas, weight=1)
+        paned_window.add(scrollbar)
 
         # Right pane: Preview
-        preview_frame = ttk.Frame(paned_window, width=500)
-        self.preview_label = ttk.Label(preview_frame, text="Select a meme to preview", anchor=tk.CENTER, background=BG_SECONDARY)
+        preview_frame = ttk.Frame(paned_window, width=500, style="TLabelframe")
+        self.preview_label = ttk.Label(preview_frame, text="Click a meme title to preview", anchor=tk.CENTER, background=BG_SECONDARY)
         self.preview_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         paned_window.add(preview_frame, weight=2)
 
         # --- Step 3 & 4 (Combined and initially hidden) ---
         self.bottom_controls_frame = ttk.Frame(self.main_frame)
-
         self.video_group = ttk.LabelFrame(self.bottom_controls_frame, text="Step 3: Add Your Video Files", padding="10")
         self.video_group.pack(fill=tk.X, pady=5, padx=0)
         file_select_frame = ttk.Frame(self.video_group, style="TLabelframe")
@@ -130,58 +128,38 @@ class MemeCompilerApp(tk.Tk):
         self.compile_button = ttk.Button(self.compile_group, text="Compile Video!", command=self.start_compilation, state=tk.DISABLED)
         self.compile_button.pack(fill=tk.X, pady=5, ipady=10)
 
-        # --- Status Bar ---
         self.status_var = tk.StringVar(value="Ready. Enter a keyword to start.")
         status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor='w', padding=5)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-    def on_meme_select(self, event=None):
-        self.check_compilation_readiness()
-        self.update_meme_preview()
-
-    def update_meme_preview(self):
-        selections = self.results_listbox.curselection()
-        if not selections:
-            return
-
-        selected_index = selections[0] # Preview the first selected item
-        meme = self.found_memes[selected_index]
-        url = meme['url']
-
-        if not url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+    def update_meme_preview(self, meme_url):
+        if not meme_url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
             self.preview_label.config(image='', text="Video/Link cannot be previewed.")
             return
-
         self.preview_label.config(image='', text="Loading preview...")
-        threading.Thread(target=self._load_preview_image, args=(url,), daemon=True).start()
+        threading.Thread(target=self._load_preview_image, args=(meme_url,), daemon=True).start()
 
     def _load_preview_image(self, url):
         img = fetch_image(url)
         if not img:
             self.after(0, lambda: self.preview_label.config(text="Preview failed to load."))
             return
-
-        # Resize image to fit the preview pane
-        pane_width = self.preview_label.winfo_width()
-        pane_height = self.preview_label.winfo_height()
-        if pane_width < 2 or pane_height < 2: # Check if the widget is visible
-            pane_width, pane_height = 500, 400 # Fallback size
-
+        pane_width, pane_height = 500, 400
         img.thumbnail((pane_width, pane_height), Image.Resampling.LANCZOS)
-
         self.preview_image = ImageTk.PhotoImage(img)
         self.after(0, lambda: self.preview_label.config(image=self.preview_image, text=""))
 
     def select_file(self, var):
-        filepath = filedialog.askopenfilename(title=f"Select Video File", filetypes=[("Video/GIF Files", "*.mp4 *.mov *.avi *.gif"), ("All files", "*.*")])
+        filepath = filedialog.askopenfilename(title=f"Select Video File", filetypes=[("Video/GIF Files", "*.mp4 *.mov *.avi *.gif")])
         if filepath:
-            var.set(os.path.basename(filepath)) # Show only filename
+            var.set(filepath) # Store full path
             self.check_compilation_readiness()
 
     def start_search(self):
         self.search_button.config(state=tk.DISABLED)
         self.status_var.set(f"Searching for '{self.keyword_var.get()}' memes...")
-        self.results_listbox.delete(0, tk.END)
+        for widget in self.meme_list_frame.winfo_children(): widget.destroy()
+        self.meme_widgets.clear()
         self.results_group.pack_forget()
         self.bottom_controls_frame.pack_forget()
         search_thread = threading.Thread(target=self.search_worker, daemon=True)
@@ -189,7 +167,6 @@ class MemeCompilerApp(tk.Tk):
 
     def search_worker(self):
         try:
-            # Assumes credentials are set via env vars for now
             reddit = get_reddit_instance()
             self.found_memes = find_memes(reddit, self.keyword_var.get())
             self.after(0, self.update_results_list)
@@ -200,9 +177,21 @@ class MemeCompilerApp(tk.Tk):
             self.after(0, lambda: self.search_button.config(state=tk.NORMAL))
 
     def update_results_list(self):
+        for widget in self.meme_list_frame.winfo_children(): widget.destroy()
+        self.meme_widgets.clear()
+
         if self.found_memes:
-            for meme in self.found_memes:
-                self.results_listbox.insert(tk.END, f"({meme['upvotes']}) {meme['title']}")
+            for i, meme in enumerate(self.found_memes):
+                var = tk.BooleanVar()
+                cb = ttk.Checkbutton(self.meme_list_frame, variable=var, command=self.check_compilation_readiness, style="TCheckbutton")
+                cb.grid(row=i, column=0, sticky='w')
+
+                lbl = ttk.Label(self.meme_list_frame, text=f"({meme['upvotes']}) {meme['title']}", style="Url.TLabel", cursor="hand2", wraplength=350)
+                lbl.grid(row=i, column=1, sticky='w', padx=5)
+                lbl.bind("<Button-1>", lambda e, url=meme['url']: self.update_meme_preview(url))
+
+                self.meme_widgets[i] = {'var': var, 'meme': meme}
+
             self.status_var.set(f"Found {len(self.found_memes)} memes. Select some to continue.")
             self.results_group.pack(fill=tk.BOTH, expand=True, pady=5, padx=10)
             self.bottom_controls_frame.pack(fill=tk.X, pady=5, padx=10)
@@ -210,8 +199,8 @@ class MemeCompilerApp(tk.Tk):
             self.status_var.set(f"No memes found for '{self.keyword_var.get()}'. Try another keyword.")
         self.check_compilation_readiness()
 
-    def check_compilation_readiness(self, event=None):
-        memes_selected = len(self.results_listbox.curselection()) > 0
+    def check_compilation_readiness(self):
+        memes_selected = any(item['var'].get() for item in self.meme_widgets.values())
         videos_selected = all([self.intro_path.get(), self.outro_path.get(), self.background_path.get()])
 
         if memes_selected and videos_selected:
@@ -220,16 +209,14 @@ class MemeCompilerApp(tk.Tk):
             self.compile_button.config(state=tk.DISABLED)
 
     def start_compilation(self):
-        selected_indices = self.results_listbox.curselection()
-        if not selected_indices:
+        selected_memes = [item['meme'] for item in self.meme_widgets.values() if item['var'].get()]
+
+        if not selected_memes:
             messagebox.showerror("Error", "No memes selected.")
             return
 
-        selected_memes = [self.found_memes[i] for i in selected_indices]
-
         output_path = filedialog.asksaveasfilename(defaultextension=".mp4", filetypes=[("MP4 Video", "*.mp4")])
-        if not output_path:
-            return
+        if not output_path: return
 
         self.status_var.set("Starting video compilation... This may take a while.")
         self.compile_button.config(state=tk.DISABLED)
@@ -254,7 +241,7 @@ class MemeCompilerApp(tk.Tk):
             self.after(0, lambda: messagebox.showerror("Compilation Error", f"An error occurred: {e}"))
             self.status_var.set("Error during compilation.")
         finally:
-            self.after(0, lambda: self.check_compilation_readiness()) # Re-enable if still valid
+            self.after(0, lambda: self.check_compilation_readiness())
 
 if __name__ == "__main__":
     missing_deps_error = check_dependencies()
@@ -269,7 +256,7 @@ if __name__ == "__main__":
         root = tk.Tk()
         root.withdraw()
         messagebox.showwarning("Missing Credentials", "Reddit API credentials are not set in environment variables. Please set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET for the app to work.")
-        root.destroy()
+        # We don't exit here, user might want to see UI. It will fail on search.
 
     app = MemeCompilerApp()
     app.mainloop()
