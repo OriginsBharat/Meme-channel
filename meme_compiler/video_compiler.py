@@ -37,13 +37,14 @@ def _resize_and_crop_to_fill(clip, target_size):
         y_center=resized_clip.h / 2
     )
 
-def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, api_key=None, voice_id=None, vertical_format=False):
+def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, api_key=None, voice_id=None, vertical_format=False, music_path=None):
     """
     Compiles a video from memes, an intro, an outro, and a background video.
 
     Args:
         ... (all previous args)
         vertical_format (bool): If True, creates a 9:16 vertical video.
+        music_path (str, optional): Path to the background music file.
     """
     print("Starting video compilation...")
     temp_folder = "temp_media"
@@ -51,12 +52,13 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
     # --- 1. Download memes ---
     if not os.path.exists(temp_folder):
         os.makedirs(temp_folder)
-    downloaded_meme_paths = [
-        shutil.copy(meme['url'], os.path.join(temp_folder, os.path.basename(meme['url']))) if os.path.exists(meme['url'])
-        else download_file(meme['url'], temp_folder)
-        for meme in selected_memes
-    ]
-    downloaded_meme_paths = [p for p in downloaded_meme_paths if p]
+
+    print("Downloading selected memes...")
+    downloaded_meme_paths = []
+    for meme in selected_memes:
+        path = download_file(meme['url'], temp_folder)
+        if path:
+            downloaded_meme_paths.append(path)
     if not downloaded_meme_paths:
         print("No valid memes could be downloaded.")
         return
@@ -120,10 +122,28 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
         final_meme_segment = concatenate_videoclips(meme_clips)
         composited_segment = CompositeVideoClip([background_segment, final_meme_segment.set_position(("center", "center"))])
 
-        # --- 6. Concatenate all parts ---
+        # --- 6. Add Background Music if provided ---
+        if music_path:
+            print(f"Adding background music from: {music_path}")
+            background_music = AudioFileClip(music_path).volumex(0.1)
+
+            # Ensure music loops if shorter than the video segment
+            if background_music.duration < composited_segment.duration:
+                background_music = background_music.fx(vfx.loop, duration=composited_segment.duration)
+            else:
+                background_music = background_music.subclip(0, composited_segment.duration)
+
+            # Combine with existing audio (TTS)
+            if composited_segment.audio:
+                combined_audio = CompositeAudioClip([composited_segment.audio, background_music])
+                composited_segment.audio = combined_audio
+            else:
+                composited_segment.audio = background_music
+
+        # --- 7. Concatenate all parts ---
         final_video = concatenate_videoclips([intro_clip, composited_segment, outro_clip])
 
-        # --- 7. Write the final video file ---
+        # --- 8. Write the final video file ---
         print(f"Writing final video to {output_path}...")
         final_video.write_videofile(output_path, codec="libx264", audio_codec="aac")
         print("Video compilation successful!")
@@ -131,7 +151,7 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
     except Exception as e:
         print(f"An error occurred during video creation: {e}")
     finally:
-        # --- 8. Cleanup ---
+        # --- 9. Cleanup ---
         print("Cleaning up temporary files...")
         intro_clip.close()
         outro_clip.close()

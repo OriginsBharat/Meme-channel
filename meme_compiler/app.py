@@ -40,9 +40,11 @@ class MemeCompilerApp(tk.Tk):
         self.intro_path_display = tk.StringVar()
         self.outro_path_display = tk.StringVar()
         self.background_path_display = tk.StringVar()
+        self.music_path_display = tk.StringVar()
         self.intro_full_path = ""
         self.outro_full_path = ""
         self.background_full_path = ""
+        self.music_full_path = ""
         self.tts_enabled_var = tk.BooleanVar(value=True)
         self.preview_image = None
         self.api_key = tk.StringVar()
@@ -145,12 +147,14 @@ class MemeCompilerApp(tk.Tk):
         ttk.Button(file_select_frame, text="Select Intro", command=lambda: self.select_file('intro')).pack(side=tk.LEFT, expand=True, padx=5)
         ttk.Button(file_select_frame, text="Select Background", command=lambda: self.select_file('background')).pack(side=tk.LEFT, expand=True, padx=5)
         ttk.Button(file_select_frame, text="Select Outro", command=lambda: self.select_file('outro')).pack(side=tk.LEFT, expand=True, padx=5)
+        ttk.Button(file_select_frame, text="Select BG Music", command=lambda: self.select_file('music')).pack(side=tk.LEFT, expand=True, padx=5)
 
         labels_frame = ttk.Frame(self.video_group, style="TLabelframe")
         labels_frame.pack(fill=tk.X, pady=(5,0))
-        ttk.Label(labels_frame, textvariable=self.intro_path_display, wraplength=280, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
-        ttk.Label(labels_frame, textvariable=self.background_path_display, wraplength=280, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
-        ttk.Label(labels_frame, textvariable=self.outro_path_display, wraplength=280, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
+        ttk.Label(labels_frame, textvariable=self.intro_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
+        ttk.Label(labels_frame, textvariable=self.background_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
+        ttk.Label(labels_frame, textvariable=self.outro_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
+        ttk.Label(labels_frame, textvariable=self.music_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
 
         self.compile_group = ttk.LabelFrame(self.bottom_controls_frame, text="Step 4: Finish & Compile", padding="10")
         self.compile_group.pack(fill=tk.X, pady=5, padx=0, side=tk.BOTTOM)
@@ -206,7 +210,13 @@ class MemeCompilerApp(tk.Tk):
         self.after(0, lambda: self.preview_label.config(image=self.preview_image, text=""))
 
     def select_file(self, file_type):
-        filepath = filedialog.askopenfilename(title=f"Select {file_type.title()} File", filetypes=[("Video/GIF Files", "*.mp4 *.mov *.avi *.gif")])
+        if file_type == 'music':
+            filetypes = [("Audio Files", "*.mp3 *.wav")]
+        else:
+            filetypes = [("Video/GIF Files", "*.mp4 *.mov *.avi *.gif")]
+
+        filepath = filedialog.askopenfilename(title=f"Select {file_type.title()} File", filetypes=filetypes)
+
         if filepath:
             if file_type == 'intro':
                 self.intro_full_path = filepath
@@ -217,6 +227,9 @@ class MemeCompilerApp(tk.Tk):
             elif file_type == 'background':
                 self.background_full_path = filepath
                 self.background_path_display.set(os.path.basename(filepath))
+            elif file_type == 'music':
+                self.music_full_path = filepath
+                self.music_path_display.set(os.path.basename(filepath))
             self.check_compilation_readiness()
 
     def start_search(self):
@@ -369,6 +382,7 @@ class MemeCompilerApp(tk.Tk):
         voice_name = self.selected_voice_id.get()
         voice_id = self.voices_map.get(voice_name)
         vertical_format = self.vertical_format_var.get()
+        music_path = self.music_full_path
 
         if tts_enabled and not all([api_key, voice_id]):
             messagebox.showerror("TTS Error", "TTS is enabled, but no API key is configured or voice is selected. Please check your settings.")
@@ -382,14 +396,14 @@ class MemeCompilerApp(tk.Tk):
 
         compilation_thread = threading.Thread(
             target=self.compilation_worker,
-            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, api_key, voice_id, vertical_format),
+            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, api_key, voice_id, vertical_format, music_path),
             daemon=True
         )
         compilation_thread.start()
 
-    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, api_key, voice_id, vertical_format):
+    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, api_key, voice_id, vertical_format, music_path):
         try:
-            create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, api_key=api_key, voice_id=voice_id, vertical_format=vertical_format)
+            create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, api_key=api_key, voice_id=voice_id, vertical_format=vertical_format, music_path=music_path)
             self.after(0, lambda: messagebox.showinfo("Success!", f"Video compiled and saved to:\n{output}"))
             self.status_var.set("Compilation finished! Ready for a new task.")
         except Exception as e:
