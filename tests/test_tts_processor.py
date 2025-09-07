@@ -1,87 +1,124 @@
 import os
 import sys
 import shutil
+import unittest
+from unittest.mock import patch, MagicMock
 
 # Add the parent directory to the path to allow importing the main modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from meme_compiler.tts_processor import get_available_voices, generate_tts_audio, extract_text_from_image
+# Functions to test
+from meme_compiler.tts_processor import (
+    extract_text_from_image,
+    get_elevenlabs_subscription_info,
+    get_elevenlabs_voices,
+    generate_elevenlabs_tts,
+    play_voice_preview
+)
 
-if __name__ == '__main__':
-    print("--- Running TTS & OCR Processor Tests ---")
-
-    # This import is here because Pillow is a dependency of the main app, not the test itself
-    from PIL import Image, ImageDraw, ImageFont
-
-    assets_dir = 'test_assets'
-
-    try:
-        # --- Setup Test Assets ---
-        if not os.path.exists(assets_dir):
-            os.makedirs(assets_dir)
-
-        test_image_path = os.path.join(assets_dir, "test_ocr_image.png")
-
+# Keep the existing OCR test, as it's still relevant
+class TestOcrProcessor(unittest.TestCase):
+    def setUp(self):
+        self.assets_dir = 'test_assets_ocr'
+        if not os.path.exists(self.assets_dir):
+            os.makedirs(self.assets_dir)
+        from PIL import Image, ImageDraw, ImageFont
+        self.test_image_path = os.path.join(self.assets_dir, "test_ocr_image.png")
+        self.test_string = "This is a test for easyocr"
         try:
             img = Image.new('RGB', (600, 150), color=(255, 255, 255))
             draw = ImageDraw.Draw(img)
-            try:
-                font = ImageFont.truetype("DejaVuSans.ttf", 40)
-            except IOError:
-                print("Default font not found for test image. Using basic font.")
-                font = ImageFont.load_default()
-            test_string = "This is a test for easyocr"
-            draw.text((10, 10), test_string, fill=(0, 0, 0), font=font)
-            img.save(test_image_path)
-            print(f"Created test image at: {test_image_path}")
+            font = ImageFont.load_default()
+            draw.text((10, 10), self.test_string, fill=(0, 0, 0), font=font)
+            img.save(self.test_image_path)
         except Exception as e:
-            print(f"Failed to create test image. Cannot run OCR test. Error: {e}")
-            test_image_path = None # Ensure test doesn't run if image fails
+            self.fail(f"Failed to create test image: {e}")
 
-        # --- Run OCR Test ---
-        if test_image_path:
-            print("\n--- Testing OCR (easyocr) ---")
-            extracted_text = extract_text_from_image(test_image_path)
-            if extracted_text:
-                print(f"SUCCESS: Extracted text: '{extracted_text}'")
-                if test_string.lower() in extracted_text.lower():
-                    print("SUCCESS: Found original string in extracted text.")
-                else:
-                    print("WARNING: Original string not found in extracted text.")
-            else:
-                print("FAILURE: OCR did not extract any text.")
+    def tearDown(self):
+        if os.path.exists(self.assets_dir):
+            shutil.rmtree(self.assets_dir)
 
-        # --- Run TTS Tests ---
-        print("\n--- Testing Voice Discovery ---")
-        voices = get_available_voices()
-        if voices:
-            print("Found available voices:")
-            for name, voice_id in voices.items():
-                print(f"- {name}")
+    def test_ocr_extraction(self):
+        """Tests that a key part of the string is extracted, allowing for minor OCR errors."""
+        extracted_text = extract_text_from_image(self.test_image_path)
+        self.assertIn("easyocr", extracted_text.lower())
 
-            print("\n--- Testing TTS Generation ---")
-            if len(voices) > 1 or (len(voices) == 1 and "default" not in list(voices.keys())[0].lower()):
-                first_voice_id = list(voices.values())[0]
-                test_text = "Hello, this is a test of the new pyttsx3 engine."
-                output_audio_path = os.path.join(assets_dir, "test_pyttsx3_output.mp3")
+# New test class for the ElevenLabs TTS functions
+class TestElevenLabsProcessor(unittest.TestCase):
+    def setUp(self):
+        self.assets_dir = 'test_assets_tts'
+        if not os.path.exists(self.assets_dir):
+            os.makedirs(self.assets_dir)
+        self.dummy_api_key = "dummy_key"
 
-                if generate_tts_audio(test_text, output_audio_path, first_voice_id):
-                    if os.path.exists(output_audio_path):
-                        print(f"SUCCESS: Test audio file created successfully.")
-                    else:
-                        print("FAILURE: TTS function returned success, but file was not created.")
-                else:
-                    print("FAILURE: TTS function failed.")
-            else:
-                print("Skipping TTS generation test as no real voices were found (espeak likely missing).")
-        else:
-            print("No voices found, cannot test TTS generation.")
+    def tearDown(self):
+        if os.path.exists(self.assets_dir):
+            shutil.rmtree(self.assets_dir)
 
-    finally:
-        # --- Cleanup ---
-        print("\n--- Cleaning up test assets ---")
-        if os.path.exists(assets_dir):
-            shutil.rmtree(assets_dir)
-            print(f"Removed test assets directory: {assets_dir}")
+    @patch('meme_compiler.tts_processor.ElevenLabs')
+    def test_get_subscription_info_success(self, MockElevenLabs):
+        mock_client = MockElevenLabs.return_value
+        mock_sub = MagicMock()
+        mock_sub.character_count = 500
+        mock_sub.character_limit = 10000
+        mock_client.user.get_subscription.return_value = mock_sub
 
-    print("\n--- TTS & OCR Processor Tests Finished ---")
+        info = get_elevenlabs_subscription_info(self.dummy_api_key)
+        self.assertIsNotNone(info)
+        self.assertEqual(info.character_count, 500)
+        MockElevenLabs.assert_called_with(api_key=self.dummy_api_key)
+
+    @patch('meme_compiler.tts_processor.ElevenLabs')
+    def test_get_subscription_info_failure(self, MockElevenLabs):
+        mock_client = MockElevenLabs.return_value
+        mock_client.user.get_subscription.side_effect = Exception("API Error")
+        info = get_elevenlabs_subscription_info(self.dummy_api_key)
+        self.assertIsNone(info)
+
+    @patch('meme_compiler.tts_processor.ElevenLabs')
+    def test_get_voices_success(self, MockElevenLabs):
+        mock_client = MockElevenLabs.return_value
+        # Configure the mock objects correctly
+        mock_voice1 = MagicMock()
+        mock_voice1.name = "Rachel"
+        mock_voice1.voice_id = "v1"
+
+        mock_voice2 = MagicMock()
+        mock_voice2.name = "Josh"
+        mock_voice2.voice_id = "v2"
+
+        mock_voices_response = MagicMock()
+        mock_voices_response.voices = [mock_voice1, mock_voice2]
+        mock_client.voices.get_all.return_value = mock_voices_response
+
+        voices = get_elevenlabs_voices(self.dummy_api_key)
+        self.assertEqual(len(voices), 2)
+        self.assertIn("Rachel", voices)
+        self.assertEqual(voices["Rachel"], "v1")
+
+    @patch('meme_compiler.tts_processor.ElevenLabs')
+    def test_generate_tts_success(self, MockElevenLabs):
+        mock_client = MockElevenLabs.return_value
+        mock_client.generate.return_value = b'fake_audio_data'
+        output_path = os.path.join(self.assets_dir, "test.mp3")
+
+        success = generate_elevenlabs_tts(self.dummy_api_key, "v1", "hello", output_path)
+        self.assertTrue(success)
+        self.assertTrue(os.path.exists(output_path))
+        with open(output_path, 'rb') as f:
+            self.assertEqual(f.read(), b'fake_audio_data')
+
+    @patch('meme_compiler.tts_processor.playsound')
+    @patch('meme_compiler.tts_processor.ElevenLabs')
+    def test_play_voice_preview_success(self, MockElevenLabs, mock_playsound):
+        mock_client = MockElevenLabs.return_value
+        mock_client.generate.return_value = b'fake_preview_audio'
+
+        play_voice_preview(self.dummy_api_key, "v1")
+        # Check that playsound was called with the temporary file
+        mock_playsound.assert_called_once()
+        # Verify the temp file was created and then removed
+        self.assertFalse(os.path.exists("temp_preview.mp3"))
+
+if __name__ == '__main__':
+    unittest.main()

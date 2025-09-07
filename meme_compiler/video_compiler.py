@@ -3,7 +3,7 @@ import os
 from moviepy.editor import *
 from urllib.parse import urlparse
 import shutil
-from .tts_processor import extract_text_from_image, generate_tts_audio
+from .tts_processor import extract_text_from_image, generate_elevenlabs_tts
 
 def download_file(url, folder="temp_media"):
     """Downloads a file from a URL to a local folder."""
@@ -25,7 +25,7 @@ def download_file(url, folder="temp_media"):
         print(f"Error downloading {url}: {e}")
         return None
 
-def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, voice_id=None):
+def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, api_key=None, voice_id=None):
     """
     Compiles a video from memes, an intro, an outro, and a background video.
 
@@ -36,6 +36,7 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
         background_path (str): Filepath for the background gameplay video.
         output_path (str): Where to save the final compiled video.
         enable_tts (bool): Whether to enable Text-to-Speech for image memes.
+        api_key (str, optional): The API key for ElevenLabs.
         voice_id (str, optional): The ID of the voice to use for TTS.
     """
     print("Starting video compilation...")
@@ -84,7 +85,7 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
                     text = extract_text_from_image(path)
                     if text:
                         audio_path = os.path.join(temp_folder, f"tts_{i}.mp3")
-                        if generate_tts_audio(text, audio_path, voice_id=voice_id):
+                        if generate_elevenlabs_tts(api_key, voice_id, text, audio_path):
                             audio_clip = AudioFileClip(audio_path)
                             # If audio is longer than the clip, cut the audio.
                             if audio_clip.duration > clip.duration:

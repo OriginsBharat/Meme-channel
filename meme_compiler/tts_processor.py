@@ -1,10 +1,10 @@
 import easyocr
-import pyttsx3
 import os
+from elevenlabs.client import ElevenLabs
+from elevenlabs import play
+from playsound import playsound
 
 # --- OCR Model Initialization ---
-# This is done once when the module is imported. It can take a moment
-# as it loads the deep learning model into memory.
 print("Initializing OCR engine (easyocr)... This may take a moment.")
 try:
     reader = easyocr.Reader(['en'])
@@ -14,21 +14,11 @@ except Exception as e:
     reader = None
 
 def extract_text_from_image(image_path):
-    """
-    Extracts text from an image file using EasyOCR.
-
-    Args:
-        image_path (str): The path to the image file.
-
-    Returns:
-        A string containing the extracted text, or an empty string if no text is found or an error occurs.
-    """
+    """Extracts text from an image file using EasyOCR."""
     if not reader:
         print("OCR reader not available.")
         return ""
-
     try:
-        # The 'detail=0' parameter returns a list of strings directly.
         result = reader.readtext(image_path, detail=0, paragraph=True)
         text = " ".join(result)
         print(f"Extracted text: '{text.strip()}'")
@@ -37,57 +27,72 @@ def extract_text_from_image(image_path):
         print(f"An error occurred during OCR with easyocr: {e}")
         return ""
 
-def get_available_voices():
-    """
-    Gets a list of available TTS voices from pyttsx3.
+# --- ElevenLabs TTS Functions ---
 
-    Returns:
-        A dictionary mapping a display name (e.g., "Voice 0 - Male") to the voice ID.
-    """
+def get_elevenlabs_subscription_info(api_key):
+    """Fetches user subscription info from ElevenLabs."""
+    if not api_key:
+        return None
     try:
-        engine = pyttsx3.init()
-        voices = engine.getProperty('voices')
-        engine.stop()
-        voice_dict = {}
-        for i, voice in enumerate(voices):
-            gender = "Female" if hasattr(voice, 'gender') and voice.gender and "female" in voice.gender.lower() else "Male"
-            name = f"Voice {i} ({voice.name}, {gender})"
-            voice_dict[name] = voice.id
-        return voice_dict
+        client = ElevenLabs(api_key=api_key)
+        response = client.user.get_subscription()
+        return response
     except Exception as e:
-        print(f"Could not get pyttsx3 voices. TTS might not work. Error: {e}")
-        return {"Default": "default"}
+        print(f"Error fetching ElevenLabs subscription info: {e}")
+        return None
 
-
-def generate_tts_audio(text, output_path, voice_id=None):
-    """
-    Generates an audio file from text using pyttsx3.
-
-    Args:
-        text (str): The text to convert to speech.
-        output_path (str): The path to save the output audio file (e.g., .mp3, .wav).
-        voice_id (str, optional): The ID of the voice to use. Defaults to None (pyttsx3 default).
-
-    Returns:
-        True if successful, False otherwise.
-    """
-    if not text:
-        print("No text provided for TTS.")
-        return False
-
+def get_elevenlabs_voices(api_key):
+    """Fetches available voices from ElevenLabs."""
+    if not api_key:
+        return {}
     try:
-        engine = pyttsx3.init()
-        if voice_id and voice_id != "default":
-            engine.setProperty('voice', voice_id)
+        client = ElevenLabs(api_key=api_key)
+        voices = client.voices.get_all()
+        # Return a dictionary of voice_name: voice_id
+        return {voice.name: voice.voice_id for voice in voices.voices}
+    except Exception as e:
+        print(f"Error fetching ElevenLabs voices: {e}")
+        return {}
 
-        engine.save_to_file(text, output_path)
-        engine.runAndWait()
-        engine.stop()
+def generate_elevenlabs_tts(api_key, voice_id, text, output_path):
+    """Generates an MP3 audio file from text using the ElevenLabs API."""
+    if not all([api_key, voice_id, text]):
+        print("Missing API key, voice ID, or text for TTS generation.")
+        return False
+    try:
+        client = ElevenLabs(api_key=api_key)
+        audio = client.generate(text=text, voice=voice_id)
+
+        with open(output_path, 'wb') as f:
+            f.write(audio)
+
         print(f"TTS audio saved to {output_path}")
         return True
     except Exception as e:
-        print(f"An error occurred during pyttsx3 TTS generation: {e}")
+        print(f"An error occurred during ElevenLabs TTS generation: {e}")
         return False
 
-# This file is intended to be used as a module.
-# The test harness has been moved to tests/test_tts_processor.py
+def play_voice_preview(api_key, voice_id):
+    """Generates and plays a short audio preview of a voice using the ElevenLabs API."""
+    if not all([api_key, voice_id]):
+        print("Missing API key or voice ID for voice preview.")
+        return
+    try:
+        client = ElevenLabs(api_key=api_key)
+        # Generate a short, generic preview audio
+        preview_text = "Hello, this is a preview of my voice."
+        audio = client.generate(text=preview_text, voice=voice_id)
+
+        # Save to a temporary file to play with playsound
+        temp_preview_file = "temp_preview.mp3"
+        with open(temp_preview_file, "wb") as f:
+            f.write(audio)
+
+        # Play the sound
+        playsound(temp_preview_file)
+
+        # Clean up the temporary file
+        os.remove(temp_preview_file)
+
+    except Exception as e:
+        print(f"An error occurred during voice preview: {e}")

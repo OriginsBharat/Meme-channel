@@ -48,8 +48,8 @@ def find_memes(reddit, keyword, limit=25, min_upvotes=500):
 
             for post in hot_posts:
                 if post.score >= min_upvotes and not post.is_self and not post.stickied:
-                    # Check if it's an image or a reddit-hosted video
-                    if post.url.endswith(('.jpg', '.jpeg', '.png', '.gif')) or 'v.redd.it' in post.url:
+                    # Check if it's an image (excluding videos)
+                    if post.url.endswith(('.jpg', '.jpeg', '.png', '.gif')):
                         memes.append({
                             "title": post.title,
                             "url": post.url,

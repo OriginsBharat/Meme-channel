@@ -53,15 +53,18 @@ if __name__ == '__main__':
     # --- Run the Test ---
     print("\n--- Calling create_video with TTS enabled ---")
     try:
-        # We need to check for dependencies first, like the main app does
-        from meme_compiler.dependency_handler import check_dependencies
-        deps_error = check_dependencies()
-        if deps_error:
-            print("Dependency check failed. The app would normally exit.")
-            print(deps_error)
-            # We will continue the test to check video logic, but TTS should be skipped.
-
-        create_video(sample_memes, intro_path, outro_path, bg_path, output_video_path, enable_tts=True)
+        # The test uses dummy video files, so moviepy will fail. This is expected.
+        # We are just checking that the function can be called without an immediate crash.
+        create_video(
+            selected_memes=sample_memes,
+            intro_path=intro_path,
+            outro_path=outro_path,
+            background_path=bg_path,
+            output_path=output_video_path,
+            enable_tts=True,
+            api_key="dummy_key",  # Dummy key for testing call signature
+            voice_id="dummy_voice" # Dummy voice for testing call signature
+        )
     except Exception as e:
         print(f"\nCaught expected exception during moviepy processing: {type(e).__name__}: {e}")
 
