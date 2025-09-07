@@ -63,7 +63,8 @@ if __name__ == '__main__':
             output_path=output_video_path,
             enable_tts=True,
             api_key="dummy_key",  # Dummy key for testing call signature
-            voice_id="dummy_voice" # Dummy voice for testing call signature
+            voice_id="dummy_voice", # Dummy voice for testing call signature
+            vertical_format=False
         )
     except Exception as e:
         print(f"\nCaught expected exception during moviepy processing: {type(e).__name__}: {e}")

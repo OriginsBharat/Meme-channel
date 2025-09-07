@@ -1,6 +1,7 @@
 import requests
 import os
 from moviepy.editor import *
+import moviepy.video.fx.all as vfx
 from urllib.parse import urlparse
 import shutil
 from .tts_processor import extract_text_from_image, generate_elevenlabs_tts
@@ -13,65 +14,67 @@ def download_file(url, folder="temp_media"):
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
-
         filename = os.path.join(folder, os.path.basename(urlparse(url).path))
-
         with open(filename, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
-
         return filename
     except requests.exceptions.RequestException as e:
         print(f"Error downloading {url}: {e}")
         return None
 
-def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, api_key=None, voice_id=None):
+def _resize_and_crop_to_fill(clip, target_size):
+    """Resizes a clip to fill the target size, cropping as needed."""
+    # Resize so that the smallest dimension matches the target dimension
+    ratio = max(target_size[0] / clip.w, target_size[1] / clip.h)
+    resized_clip = clip.resize(ratio)
+    # Crop the excess from the center
+    return vfx.crop(
+        resized_clip,
+        width=target_size[0],
+        height=target_size[1],
+        x_center=resized_clip.w / 2,
+        y_center=resized_clip.h / 2
+    )
+
+def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, api_key=None, voice_id=None, vertical_format=False):
     """
     Compiles a video from memes, an intro, an outro, and a background video.
 
     Args:
-        selected_memes (list): A list of dictionaries with meme URLs.
-        intro_path (str): Filepath for the intro video.
-        outro_path (str): Filepath for the outro video.
-        background_path (str): Filepath for the background gameplay video.
-        output_path (str): Where to save the final compiled video.
-        enable_tts (bool): Whether to enable Text-to-Speech for image memes.
-        api_key (str, optional): The API key for ElevenLabs.
-        voice_id (str, optional): The ID of the voice to use for TTS.
+        ... (all previous args)
+        vertical_format (bool): If True, creates a 9:16 vertical video.
     """
     print("Starting video compilation...")
     temp_folder = "temp_media"
-    tts_audio_files = []
 
-    # --- 1. Get all media paths (downloading if necessary) ---
+    # --- 1. Download memes ---
     if not os.path.exists(temp_folder):
         os.makedirs(temp_folder)
-
-    downloaded_meme_paths = []
-    for meme in selected_memes:
-        url = meme['url']
-        # If the "url" is actually a local file path, just copy it to the temp folder
-        if os.path.exists(url):
-            filename = os.path.basename(url)
-            dest_path = os.path.join(temp_folder, filename)
-            shutil.copy(url, dest_path)
-            path = dest_path
-        else: # Otherwise, assume it's a URL and download it
-            path = download_file(url, temp_folder)
-
-        if path:
-            downloaded_meme_paths.append(path)
-
+    downloaded_meme_paths = [
+        shutil.copy(meme['url'], os.path.join(temp_folder, os.path.basename(meme['url']))) if os.path.exists(meme['url'])
+        else download_file(meme['url'], temp_folder)
+        for meme in selected_memes
+    ]
+    downloaded_meme_paths = [p for p in downloaded_meme_paths if p]
     if not downloaded_meme_paths:
         print("No valid memes could be downloaded.")
         return
 
-    # --- 2. Load all base video clips ---
+    # --- 2. Define Target Size based on format ---
+    TARGET_SIZE = (1080, 1920) if vertical_format else None
+
+    # --- 3. Load and prepare all base video clips ---
     intro_clip = VideoFileClip(intro_path)
     outro_clip = VideoFileClip(outro_path)
     background_clip = VideoFileClip(background_path)
 
-    # --- 3. Create clips for each meme ---
+    if vertical_format:
+        intro_clip = _resize_and_crop_to_fill(intro_clip, TARGET_SIZE)
+        outro_clip = _resize_and_crop_to_fill(outro_clip, TARGET_SIZE)
+        background_clip = _resize_and_crop_to_fill(background_clip, TARGET_SIZE)
+
+    # --- 4. Create clips for each meme ---
     meme_clip_duration = 40 / len(downloaded_meme_paths)
     meme_clips = []
 
@@ -80,47 +83,47 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
             clip = None
             if path.lower().endswith(('.jpg', '.jpeg', '.png')):
                 clip = ImageClip(path).set_duration(meme_clip_duration)
-
                 if enable_tts:
                     text = extract_text_from_image(path)
                     if text:
                         audio_path = os.path.join(temp_folder, f"tts_{i}.mp3")
                         if generate_elevenlabs_tts(api_key, voice_id, text, audio_path):
                             audio_clip = AudioFileClip(audio_path)
-                            # If audio is longer than the clip, cut the audio.
                             if audio_clip.duration > clip.duration:
                                 audio_clip = audio_clip.subclip(0, clip.duration)
                             clip = clip.set_audio(audio_clip)
-                            tts_audio_files.append(audio_path)
-
             elif path.lower().endswith(('.gif', '.mp4')):
                 clip = VideoFileClip(path).set_duration(meme_clip_duration)
                 if clip.duration < meme_clip_duration and path.lower().endswith('.gif'):
                     clip = clip.fx(vfx.loop, duration=meme_clip_duration)
 
             if clip:
-                clip_resized = clip.resize(width=background_clip.w * 0.9)
+                if vertical_format:
+                    # Resize to fit width of 1080px, maintaining aspect ratio
+                    clip_resized = clip.resize(width=TARGET_SIZE[0])
+                else:
+                    # Original logic: resize to 90% of background width
+                    clip_resized = clip.resize(width=background_clip.w * 0.9)
                 meme_clips.append(clip_resized)
 
         if not meme_clips:
             print("Could not create any meme clips.")
             return
 
-        # --- 4. Composite memes over the background ---
+        # --- 5. Composite memes over the background ---
         total_meme_duration = sum(c.duration for c in meme_clips)
         if background_clip.duration < total_meme_duration:
-            print("Warning: Background video is shorter than total meme duration. Looping background.")
             background_clip = background_clip.fx(vfx.loop, duration=total_meme_duration)
 
         background_segment = background_clip.subclip(0, total_meme_duration)
 
-        final_meme_segment = concatenate_videoclips(meme_clips, method="compose")
+        final_meme_segment = concatenate_videoclips(meme_clips)
         composited_segment = CompositeVideoClip([background_segment, final_meme_segment.set_position(("center", "center"))])
 
-        # --- 5. Concatenate all parts ---
+        # --- 6. Concatenate all parts ---
         final_video = concatenate_videoclips([intro_clip, composited_segment, outro_clip])
 
-        # --- 6. Write the final video file ---
+        # --- 7. Write the final video file ---
         print(f"Writing final video to {output_path}...")
         final_video.write_videofile(output_path, codec="libx264", audio_codec="aac")
         print("Video compilation successful!")
@@ -128,24 +131,18 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
     except Exception as e:
         print(f"An error occurred during video creation: {e}")
     finally:
-        # --- 7. Cleanup ---
+        # --- 8. Cleanup ---
         print("Cleaning up temporary files...")
-        # Close all moviepy clips to release file handles
         intro_clip.close()
         outro_clip.close()
         background_clip.close()
         if 'final_video' in locals():
             final_video.close()
         for clip in meme_clips:
-            # This is tricky because some clips might have audio clips that need closing
-            if clip.audio:
+            if hasattr(clip, 'audio') and clip.audio:
                 clip.audio.close()
             clip.close()
 
-        # Delete the temporary media folder
         if os.path.exists(temp_folder):
             shutil.rmtree(temp_folder)
             print(f"Removed temporary folder: {temp_folder}")
-
-# This file is intended to be used as a module.
-# The test harness has been moved to tests/test_video_compiler.py

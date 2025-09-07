@@ -50,6 +50,7 @@ class MemeCompilerApp(tk.Tk):
         self.selected_voice_id = tk.StringVar()
         self.char_count_var = tk.StringVar(value="Characters Left: N/A")
         self.config_file = "config.json"
+        self.vertical_format_var = tk.BooleanVar(value=False)
 
         # --- Style Configuration ---
         self.style = ttk.Style(self)
@@ -165,6 +166,10 @@ class MemeCompilerApp(tk.Tk):
 
         self.preview_voice_button = ttk.Button(tts_frame, text="Preview Voice", command=self.preview_selected_voice)
         self.preview_voice_button.pack(side=tk.LEFT, padx=5)
+
+        # Vertical Format Checkbox
+        vertical_check = ttk.Checkbutton(self.compile_group, text="Create 9:16 Vertical Video (for Shorts/TikTok)", variable=self.vertical_format_var, style="TCheckbutton")
+        vertical_check.pack(anchor='w', pady=5)
 
         self.compile_button = ttk.Button(self.compile_group, text="Compile Video!", command=self.start_compilation, state=tk.DISABLED)
         self.compile_button.pack(fill=tk.X, pady=5, ipady=10)
@@ -363,6 +368,7 @@ class MemeCompilerApp(tk.Tk):
         api_key = self.api_key.get()
         voice_name = self.selected_voice_id.get()
         voice_id = self.voices_map.get(voice_name)
+        vertical_format = self.vertical_format_var.get()
 
         if tts_enabled and not all([api_key, voice_id]):
             messagebox.showerror("TTS Error", "TTS is enabled, but no API key is configured or voice is selected. Please check your settings.")
@@ -376,14 +382,14 @@ class MemeCompilerApp(tk.Tk):
 
         compilation_thread = threading.Thread(
             target=self.compilation_worker,
-            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, api_key, voice_id),
+            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, api_key, voice_id, vertical_format),
             daemon=True
         )
         compilation_thread.start()
 
-    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, api_key, voice_id):
+    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, api_key, voice_id, vertical_format):
         try:
-            create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, api_key=api_key, voice_id=voice_id)
+            create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, api_key=api_key, voice_id=voice_id, vertical_format=vertical_format)
             self.after(0, lambda: messagebox.showinfo("Success!", f"Video compiled and saved to:\n{output}"))
             self.status_var.set("Compilation finished! Ready for a new task.")
         except Exception as e:
