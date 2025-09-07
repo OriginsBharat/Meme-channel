@@ -110,7 +110,34 @@ class MemeCompilerApp(tk.Tk):
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
     def create_compiler_tab(self, parent):
-        search_group = ttk.LabelFrame(parent, text="Step 1: Find Memes", padding="10")
+        # Create a canvas and a scrollbar
+        canvas = tk.Canvas(parent, bg=BG_COLOR, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas, style="TFrame")
+
+        # Configure the canvas
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Create a window in the canvas for the frame
+        canvas_frame = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+        def on_frame_configure(event):
+            # Update the scroll region to encompass the inner frame
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def on_canvas_configure(event):
+            # Resize the inner frame to match the canvas width
+            canvas.itemconfig(canvas_frame, width=event.width)
+
+        scrollable_frame.bind("<Configure>", on_frame_configure)
+        canvas.bind("<Configure>", on_canvas_configure)
+
+        # --- Place all widgets inside the scrollable_frame ---
+        content_frame = scrollable_frame
+
+        search_group = ttk.LabelFrame(content_frame, text="Step 1: Find Memes", padding="10")
         search_group.pack(fill=tk.X, pady=5, padx=10)
         keyword_frame = ttk.Frame(search_group, style="TLabelframe")
         keyword_frame.pack(fill=tk.X)
@@ -120,27 +147,27 @@ class MemeCompilerApp(tk.Tk):
         self.search_button = ttk.Button(keyword_frame, text="Search...", command=self.start_search)
         self.search_button.pack(side=tk.RIGHT, padx=(10, 0))
 
-        self.results_group = ttk.LabelFrame(parent, text="Step 2: Select Memes (Click text to preview)", padding="10")
+        self.results_group = ttk.LabelFrame(content_frame, text="Step 2: Select Memes (Click text to preview)", padding="10")
         paned_window = ttk.PanedWindow(self.results_group, orient=tk.HORIZONTAL)
         paned_window.pack(fill=tk.BOTH, expand=True)
 
         list_canvas = tk.Canvas(paned_window, bg=BG_SECONDARY, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(paned_window, orient="vertical", command=list_canvas.yview)
+        meme_scrollbar = ttk.Scrollbar(paned_window, orient="vertical", command=list_canvas.yview)
         self.meme_list_frame = ttk.Frame(list_canvas, style="TLabelframe")
         self.meme_list_frame.bind("<Configure>", lambda e: list_canvas.configure(scrollregion=list_canvas.bbox("all")))
         list_canvas.create_window((0, 0), window=self.meme_list_frame, anchor="nw")
-        list_canvas.configure(yscrollcommand=scrollbar.set)
+        list_canvas.configure(yscrollcommand=meme_scrollbar.set)
         paned_window.add(list_canvas, weight=1)
-        paned_window.add(scrollbar)
+        paned_window.add(meme_scrollbar)
 
         preview_frame = ttk.Frame(paned_window, width=500, style="TLabelframe")
         self.preview_label = ttk.Label(preview_frame, text="Click a meme title to preview", anchor=tk.CENTER, background=BG_SECONDARY)
         self.preview_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         paned_window.add(preview_frame, weight=2)
 
-        self.bottom_controls_frame = ttk.Frame(parent)
+        self.bottom_controls_frame = ttk.Frame(content_frame)
         self.video_group = ttk.LabelFrame(self.bottom_controls_frame, text="Step 3: Add Your Video Files", padding="10")
-        self.video_group.pack(fill=tk.X, pady=5, padx=0)
+        self.video_group.pack(fill=tk.X, pady=5, padx=10)
 
         file_select_frame = ttk.Frame(self.video_group, style="TLabelframe")
         file_select_frame.pack(fill=tk.X)
@@ -157,9 +184,8 @@ class MemeCompilerApp(tk.Tk):
         ttk.Label(labels_frame, textvariable=self.music_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
 
         self.compile_group = ttk.LabelFrame(self.bottom_controls_frame, text="Step 4: Finish & Compile", padding="10")
-        self.compile_group.pack(fill=tk.X, pady=5, padx=0, side=tk.BOTTOM)
+        self.compile_group.pack(fill=tk.X, pady=5, padx=10, side=tk.BOTTOM)
 
-        # TTS Controls
         tts_frame = ttk.Frame(self.compile_group, style="TLabelframe")
         tts_frame.pack(fill=tk.X, pady=5)
         tts_check = ttk.Checkbutton(tts_frame, text="Add TTS Voiceover for Image Memes", variable=self.tts_enabled_var, style="TCheckbutton")
@@ -171,7 +197,6 @@ class MemeCompilerApp(tk.Tk):
         self.preview_voice_button = ttk.Button(tts_frame, text="Preview Voice", command=self.preview_selected_voice)
         self.preview_voice_button.pack(side=tk.LEFT, padx=5)
 
-        # Vertical Format Checkbox
         vertical_check = ttk.Checkbutton(self.compile_group, text="Create 9:16 Vertical Video (for Shorts/TikTok)", variable=self.vertical_format_var, style="TCheckbutton")
         vertical_check.pack(anchor='w', pady=5)
 
@@ -287,8 +312,7 @@ class MemeCompilerApp(tk.Tk):
                     config = json.load(f)
                     self.api_key.set(config.get("api_key", ""))
                 if self.api_key.get():
-                    self.status_var.set("API Key loaded. Refreshing data...")
-                    self.save_config_and_refresh()
+                    self.status_var.set("API Key loaded. Go to Settings to refresh data if needed.")
             else:
                 self.status_var.set("No API key found. Please add one in the Settings tab.")
         except Exception as e:
@@ -332,7 +356,7 @@ class MemeCompilerApp(tk.Tk):
             remaining = limit - used
             self.after(0, lambda: self.char_count_var.set(f"Characters Left: {remaining}"))
         else:
-            self.after(0, lambda: self.char_count_var.set("Characters Left: Error"))
+            self.after(0, lambda: self.char_count_var.set("Characters Left: Check API Key"))
 
         # Update voices
         self.voices_map = get_elevenlabs_voices(key)
