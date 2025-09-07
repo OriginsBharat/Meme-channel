@@ -48,20 +48,22 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
     """
     print("Starting video compilation...")
     temp_folder = "temp_media"
+    tts_failures = [] # To track which memes failed TTS
 
     # --- 1. Download memes ---
     if not os.path.exists(temp_folder):
         os.makedirs(temp_folder)
 
     print("Downloading selected memes...")
-    downloaded_meme_paths = []
+    downloaded_memes = []
     for meme in selected_memes:
         path = download_file(meme['url'], temp_folder)
         if path:
-            downloaded_meme_paths.append(path)
-    if not downloaded_meme_paths:
+            downloaded_memes.append({'path': path, 'title': meme['title']})
+
+    if not downloaded_memes:
         print("No valid memes could be downloaded.")
-        return
+        return None
 
     # --- 2. Define Target Size based on format ---
     TARGET_SIZE = (1080, 1920) if vertical_format else None
@@ -77,23 +79,32 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
         background_clip = _resize_and_crop_to_fill(background_clip, TARGET_SIZE)
 
     # --- 4. Create clips for each meme ---
-    meme_clip_duration = 40 / len(downloaded_meme_paths)
+    meme_clip_duration = 40 / len(downloaded_memes)
     meme_clips = []
 
     try:
-        for i, path in enumerate(downloaded_meme_paths):
+        for i, meme_data in enumerate(downloaded_memes):
+            path = meme_data['path']
+            title = meme_data['title']
             clip = None
+
             if path.lower().endswith(('.jpg', '.jpeg', '.png')):
                 clip = ImageClip(path).set_duration(meme_clip_duration)
                 if enable_tts:
                     text = extract_text_from_image(path)
                     if text:
                         audio_path = os.path.join(temp_folder, f"tts_{i}.mp3")
-                        if generate_elevenlabs_tts(api_key, voice_id, text, audio_path):
+                        if not generate_elevenlabs_tts(api_key, voice_id, text, audio_path):
+                            print(f"Warning: TTS generation failed for '{title}'")
+                            tts_failures.append(title)
+                        else:
                             audio_clip = AudioFileClip(audio_path)
                             if audio_clip.duration > clip.duration:
                                 audio_clip = audio_clip.subclip(0, clip.duration)
                             clip = clip.set_audio(audio_clip)
+                    else:
+                        print(f"Warning: OCR failed for '{title}', skipping TTS.")
+
             elif path.lower().endswith(('.gif', '.mp4')):
                 clip = VideoFileClip(path).set_duration(meme_clip_duration)
                 if clip.duration < meme_clip_duration and path.lower().endswith('.gif'):
@@ -101,16 +112,14 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
 
             if clip:
                 if vertical_format:
-                    # Resize to fit width of 1080px, maintaining aspect ratio
                     clip_resized = clip.resize(width=TARGET_SIZE[0])
                 else:
-                    # Original logic: resize to 90% of background width
                     clip_resized = clip.resize(width=background_clip.w * 0.9)
                 meme_clips.append(clip_resized)
 
         if not meme_clips:
             print("Could not create any meme clips.")
-            return
+            return None
 
         # --- 5. Composite memes over the background ---
         total_meme_duration = sum(c.duration for c in meme_clips)
@@ -147,9 +156,11 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
         print(f"Writing final video to {output_path}...")
         final_video.write_videofile(output_path, codec="libx264", audio_codec="aac")
         print("Video compilation successful!")
+        return tts_failures
 
     except Exception as e:
         print(f"An error occurred during video creation: {e}")
+        return None # Return None on a hard crash
     finally:
         # --- 9. Cleanup ---
         print("Cleaning up temporary files...")

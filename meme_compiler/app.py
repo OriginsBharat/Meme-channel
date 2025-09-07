@@ -427,12 +427,28 @@ class MemeCompilerApp(tk.Tk):
 
     def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, api_key, voice_id, vertical_format, music_path):
         try:
-            create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, api_key=api_key, voice_id=voice_id, vertical_format=vertical_format, music_path=music_path)
-            self.after(0, lambda: messagebox.showinfo("Success!", f"Video compiled and saved to:\n{output}"))
-            self.status_var.set("Compilation finished! Ready for a new task.")
+            tts_failures = create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, api_key=api_key, voice_id=voice_id, vertical_format=vertical_format, music_path=music_path)
+
+            # This will run on the main thread after the worker is done
+            def handle_result():
+                if tts_failures is None: # This indicates a hard crash in create_video
+                    messagebox.showerror("Compilation Error", "A critical error occurred during video creation. Check the console for details.")
+                    self.status_var.set("Error during compilation.")
+                    return
+
+                messagebox.showinfo("Success!", f"Video compiled and saved to:\n{output}")
+                self.status_var.set("Compilation finished! Ready for a new task.")
+
+                if tts_failures:
+                    failed_titles = "\n - ".join(tts_failures)
+                    warning_message = f"The video was created, but TTS failed for the following memes:\n\n - {failed_titles}\n\nThis could be due to your ElevenLabs account being out of credits, or an issue with the text extracted from the meme."
+                    messagebox.showwarning("TTS Failures", warning_message)
+
+            self.after(0, handle_result)
+
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Compilation Error", f"An error occurred: {e}"))
-            self.status_var.set("Error during compilation.")
+            self.after(0, lambda: messagebox.showerror("Compilation Error", f"An unexpected error occurred in the compilation thread: {e}"))
+            self.after(0, lambda: self.status_var.set("Error during compilation."))
         finally:
             self.after(0, lambda: self.check_compilation_readiness())
 
