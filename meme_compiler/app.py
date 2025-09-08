@@ -5,7 +5,12 @@ import os
 import json
 import requests
 from io import BytesIO
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, __version__ as PILLOW_VERSION
+
+# Monkey-patch for Pillow 10.0.0+ breaking change
+# See: https://pillow.readthedocs.io/en/stable/deprecations.html#constants
+if tuple(map(int, PILLOW_VERSION.split('.'))) >= (10, 0, 0):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
 
 from .reddit_scraper import find_memes, get_reddit_instance
 from .video_compiler import create_video
