@@ -44,7 +44,8 @@ class TestVideoCompiler(unittest.TestCase):
             intro_path="/tmp/intro.mp4",
             outro_path="/tmp/outro.mp4",
             background_path="/tmp/bg.mp4",
-            vertical_format=False
+            vertical_format=False,
+            ocr_api_key="dummy_ocr_key"
         )
 
         # --- Assertions ---
@@ -91,7 +92,8 @@ class TestVideoCompiler(unittest.TestCase):
             intro_path="/tmp/intro.mp4",
             outro_path="/tmp/outro.mp4",
             background_path="/tmp/bg.mp4",
-            vertical_format=True
+            vertical_format=True,
+            ocr_api_key="dummy_ocr_key"
         )
 
         # --- Assertions ---
@@ -138,7 +140,8 @@ class TestVideoCompiler(unittest.TestCase):
             intro_path="/tmp/intro.mp4",
             outro_path="/tmp/outro.mp4",
             background_path="/tmp/bg.mp4",
-            enable_tts=True
+            enable_tts=True,
+            ocr_api_key="dummy_ocr_key"
         )
 
         # --- Assertions ---

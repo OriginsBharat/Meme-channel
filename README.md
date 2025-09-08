@@ -1,15 +1,15 @@
 # Meme Video Compiler
 
-A desktop application to automatically find memes on Reddit and compile them into a short video, complete with a user-provided intro, outro, background video, background music, and a high-quality Text-to-Speech (TTS) voiceover using the ElevenLabs API.
+A desktop application to automatically find memes on Reddit and compile them into a short video, complete with a user-provided intro, outro, background video, background music, and a high-quality Text-to-Speech (TTS) voiceover.
 
 ## Features
 
 - **Keyword Search**: Finds memes on Reddit based on a keyword.
 - **Meme Selection**: A simple UI with checkboxes to select your favorite memes and a preview pane to view them.
 - **Fully Customizable Videos**: Use your own intro, outro, background video, and background music.
-- **High-Quality TTS**: Integrates with the ElevenLabs API to provide high-quality, natural-sounding voiceovers for image-based memes.
-- **Voice Previews**: Listen to a sample of each voice before you compile the video.
-- **API Management**: A dedicated settings tab to manage your ElevenLabs API key.
+- **Cloud-Powered OCR & TTS**: Integrates with OCR.space and ElevenLabs APIs to provide high-quality text extraction and natural-sounding voiceovers.
+- **Voice Previews**: Listen to a sample of each ElevenLabs voice before you compile the video.
+- **Centralized API Management**: A dedicated settings tab to manage your API keys for all services.
 - **Usage Tracking**: See your remaining ElevenLabs character count directly in the app.
 - **Vertical Video Format**: An option to create videos in a 9:16 aspect ratio for platforms like YouTube Shorts and TikTok.
 
@@ -29,15 +29,13 @@ A desktop application to automatically find memes on Reddit and compile them int
     ```bash
     pip install -r requirements.txt
     ```
-    > **Note on Dependencies**: This application uses `easyocr` for reading text from images, which requires the `torch` and `torchvision` libraries. These are very large (approximately 1.7 GB). Please be aware that this will increase the installation time and disk space usage.
-
 4.  **Set Environment Variables** for the Reddit API (see Usage section below).
 
 ## Usage Guide
 
 ### Step 0: API Credentials
 
-You need API keys for both Reddit and ElevenLabs.
+You need API keys for Reddit, ElevenLabs, and OCR.space.
 
 #### Reddit
 1.  Go to [Reddit's app preferences](https://www.reddit.com/prefs/apps).
@@ -56,9 +54,11 @@ You need API keys for both Reddit and ElevenLabs.
         $env:REDDIT_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
         ```
 
-#### ElevenLabs
+#### ElevenLabs & OCR.space
 1.  Go to the [ElevenLabs website](https://elevenlabs.io/), sign up, and get your API key from your profile.
-2.  Launch the application, go to the **"Settings"** tab, paste your API key into the field, and click **"Save and Refresh Voices"**. The app will save your key locally in a `config.json` file.
+2.  Go to the [OCR.space website](https://ocr.space/ocrapi) and register for a free API key.
+3.  Launch the application, go to the **"Settings"** tab, paste both API keys into their respective fields.
+4.  Click **"Save All Keys & Refresh Voices"**. The app will save your keys locally in a `config.json` file.
 
 ### Using the Application
 

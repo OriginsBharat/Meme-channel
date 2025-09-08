@@ -2,8 +2,6 @@ praw
 moviepy==1.0.3
 Pillow
 pyinstaller
-easyocr
-torch
-torchvision
 elevenlabs
 playsound==1.2.2
+requests

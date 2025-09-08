@@ -7,7 +7,6 @@ from unittest.mock import patch, MagicMock
 # Add the parent directory to the path to allow importing the main modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Functions to test
 from meme_compiler.tts_processor import (
     extract_text_from_image,
     get_elevenlabs_subscription_info,
@@ -16,32 +15,57 @@ from meme_compiler.tts_processor import (
     play_voice_preview
 )
 
-# Keep the existing OCR test, as it's still relevant
 class TestOcrProcessor(unittest.TestCase):
-    def setUp(self):
-        self.assets_dir = 'test_assets_ocr'
-        if not os.path.exists(self.assets_dir):
-            os.makedirs(self.assets_dir)
-        from PIL import Image, ImageDraw, ImageFont
-        self.test_image_path = os.path.join(self.assets_dir, "test_ocr_image.png")
-        self.test_string = "This is a test for easyocr"
-        try:
-            img = Image.new('RGB', (600, 150), color=(255, 255, 255))
-            draw = ImageDraw.Draw(img)
-            font = ImageFont.load_default()
-            draw.text((10, 10), self.test_string, fill=(0, 0, 0), font=font)
-            img.save(self.test_image_path)
-        except Exception as e:
-            self.fail(f"Failed to create test image: {e}")
 
-    def tearDown(self):
-        if os.path.exists(self.assets_dir):
-            shutil.rmtree(self.assets_dir)
+    @patch('meme_compiler.tts_processor.requests.post')
+    def test_extract_text_from_image_success(self, mock_post):
+        # --- Mock Configuration ---
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "ParsedResults": [
+                {
+                    "ParsedText": "This is a test\r\n"
+                }
+            ],
+            "IsErroredOnProcessing": False
+        }
+        mock_post.return_value = mock_response
 
-    def test_ocr_extraction(self):
-        """Tests that a key part of the string is extracted, allowing for minor OCR errors."""
-        extracted_text = extract_text_from_image(self.test_image_path)
-        self.assertIn("easyocr", extracted_text.lower())
+        # Create a dummy file to pass to the function
+        dummy_path = "dummy_image.png"
+        with open(dummy_path, "w") as f:
+            f.write("dummy")
+
+        # --- Function Call ---
+        text = extract_text_from_image("dummy_ocr_key", dummy_path)
+
+        # --- Assertions ---
+        self.assertEqual(text, "This is a test") # Check if it strips whitespace and replaces \r\n
+        mock_post.assert_called_once()
+        # Clean up dummy file
+        os.remove(dummy_path)
+
+    @patch('meme_compiler.tts_processor.requests.post')
+    def test_extract_text_from_image_api_error(self, mock_post):
+        # --- Mock Configuration ---
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "IsErroredOnProcessing": True,
+            "ErrorMessage": ["Test API Error"]
+        }
+        mock_post.return_value = mock_response
+
+        dummy_path = "dummy_image.png"
+        with open(dummy_path, "w") as f:
+            f.write("dummy")
+
+        # --- Function Call ---
+        text = extract_text_from_image("dummy_ocr_key", dummy_path)
+
+        # --- Assertions ---
+        self.assertEqual(text, "") # Should return empty string on error
+        os.remove(dummy_path)
+
 
 # New test class for the ElevenLabs TTS functions
 class TestElevenLabsProcessor(unittest.TestCase):

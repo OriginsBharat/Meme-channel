@@ -48,6 +48,7 @@ class MemeCompilerApp(tk.Tk):
         self.tts_enabled_var = tk.BooleanVar(value=True)
         self.preview_image = None
         self.api_key = tk.StringVar()
+        self.ocr_api_key = tk.StringVar()
         self.voices_map = {}
         self.selected_voice_id = tk.StringVar()
         self.char_count_var = tk.StringVar(value="Characters Left: N/A")
@@ -204,20 +205,32 @@ class MemeCompilerApp(tk.Tk):
         self.compile_button.pack(fill=tk.X, pady=5, ipady=10)
 
     def create_settings_tab(self, parent):
-        settings_group = ttk.LabelFrame(parent, text="ElevenLabs Configuration", padding="10")
-        settings_group.pack(fill=tk.X, pady=5, padx=10)
+        # ElevenLabs Settings
+        eleven_group = ttk.LabelFrame(parent, text="ElevenLabs TTS Configuration", padding="10")
+        eleven_group.pack(fill=tk.X, pady=5, padx=10)
 
-        api_key_frame = ttk.Frame(settings_group, style="TLabelframe")
-        api_key_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(api_key_frame, text="API Key:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
-        api_key_entry = ttk.Entry(api_key_frame, textvariable=self.api_key, width=60, show="*")
-        api_key_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
+        eleven_api_frame = ttk.Frame(eleven_group, style="TLabelframe")
+        eleven_api_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(eleven_api_frame, text="ElevenLabs API Key:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
+        eleven_api_entry = ttk.Entry(eleven_api_frame, textvariable=self.api_key, width=50, show="*")
+        eleven_api_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
 
-        button_frame = ttk.Frame(settings_group, style="TLabelframe")
-        button_frame.pack(fill=tk.X, pady=10)
-        save_button = ttk.Button(button_frame, text="Save and Refresh Voices", command=self.save_config_and_refresh)
+        # OCR.space Settings
+        ocr_group = ttk.LabelFrame(parent, text="OCR.space Configuration", padding="10")
+        ocr_group.pack(fill=tk.X, pady=5, padx=10)
+
+        ocr_api_frame = ttk.Frame(ocr_group, style="TLabelframe")
+        ocr_api_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(ocr_api_frame, text="OCR.space API Key:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
+        ocr_api_entry = ttk.Entry(ocr_api_frame, textvariable=self.ocr_api_key, width=50, show="*")
+        ocr_api_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        # Buttons
+        button_frame = ttk.Frame(parent)
+        button_frame.pack(fill=tk.X, pady=10, padx=10)
+        save_button = ttk.Button(button_frame, text="Save All Keys & Refresh Voices", command=self.save_config_and_refresh)
         save_button.pack(side=tk.LEFT, padx=5)
-        clear_button = ttk.Button(button_frame, text="Clear Key", command=self.clear_api_key)
+        clear_button = ttk.Button(button_frame, text="Clear All Keys", command=self.clear_api_keys)
         clear_button.pack(side=tk.LEFT, padx=5)
 
     def update_meme_preview(self, meme_url):
@@ -310,38 +323,46 @@ class MemeCompilerApp(tk.Tk):
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.api_key.set(config.get("api_key", ""))
+                    self.api_key.set(config.get("elevenlabs_api_key", ""))
+                    self.ocr_api_key.set(config.get("ocr_api_key", ""))
                 if self.api_key.get():
-                    self.status_var.set("API Key loaded. Go to Settings to refresh data if needed.")
+                    self.status_var.set("API Keys loaded. Go to Settings to refresh data if needed.")
             else:
-                self.status_var.set("No API key found. Please add one in the Settings tab.")
+                self.status_var.set("No API keys found. Please add them in the Settings tab.")
         except Exception as e:
             messagebox.showerror("Config Error", f"Failed to load config: {e}")
 
     def save_config_and_refresh(self):
-        key = self.api_key.get()
-        if not key:
-            messagebox.showwarning("API Key", "Please enter an API key before saving.")
+        eleven_key = self.api_key.get()
+        ocr_key = self.ocr_api_key.get()
+
+        if not all([eleven_key, ocr_key]):
+            messagebox.showwarning("API Keys", "Please enter both API keys before saving.")
             return
 
+        config_data = {
+            "elevenlabs_api_key": eleven_key,
+            "ocr_api_key": ocr_key
+        }
         with open(self.config_file, 'w') as f:
-            json.dump({"api_key": key}, f)
+            json.dump(config_data, f)
 
-        messagebox.showinfo("API Key", "API Key saved successfully.")
+        messagebox.showinfo("API Keys", "API Keys saved successfully.")
         self.status_var.set("API Key saved. Fetching voices and account info...")
         # Run updates in a separate thread to keep UI responsive
         threading.Thread(target=self.refresh_elevenlabs_data, daemon=True).start()
 
-    def clear_api_key(self):
+    def clear_api_keys(self):
         self.api_key.set("")
+        self.ocr_api_key.set("")
         self.voices_map.clear()
         self.voice_dropdown['values'] = []
         self.selected_voice_id.set('')
         self.char_count_var.set("Characters Left: N/A")
         if os.path.exists(self.config_file):
             os.remove(self.config_file)
-        messagebox.showinfo("API Key", "API Key has been cleared.")
-        self.status_var.set("API Key cleared. Add a new key to use TTS features.")
+        messagebox.showinfo("API Keys", "All API Keys have been cleared.")
+        self.status_var.set("API Keys cleared. Add new keys to use features.")
 
     def refresh_elevenlabs_data(self):
         key = self.api_key.get()
@@ -402,14 +423,15 @@ class MemeCompilerApp(tk.Tk):
             return
 
         tts_enabled = self.tts_enabled_var.get()
-        api_key = self.api_key.get()
+        elevenlabs_key = self.api_key.get()
+        ocr_key = self.ocr_api_key.get()
         voice_name = self.selected_voice_id.get()
         voice_id = self.voices_map.get(voice_name)
         vertical_format = self.vertical_format_var.get()
         music_path = self.music_full_path
 
-        if tts_enabled and not all([api_key, voice_id]):
-            messagebox.showerror("TTS Error", "TTS is enabled, but no API key is configured or voice is selected. Please check your settings.")
+        if tts_enabled and not all([elevenlabs_key, voice_id, ocr_key]):
+            messagebox.showerror("TTS Error", "TTS is enabled, but an API key (ElevenLabs or OCR) is missing or a voice is not selected. Please check your settings.")
             return
 
         output_path = filedialog.asksaveasfilename(defaultextension=".mp4", filetypes=[("MP4 Video", "*.mp4")])
@@ -420,14 +442,14 @@ class MemeCompilerApp(tk.Tk):
 
         compilation_thread = threading.Thread(
             target=self.compilation_worker,
-            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, api_key, voice_id, vertical_format, music_path),
+            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, elevenlabs_key, ocr_key, voice_id, vertical_format, music_path),
             daemon=True
         )
         compilation_thread.start()
 
-    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, api_key, voice_id, vertical_format, music_path):
+    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, elevenlabs_key, ocr_key, voice_id, vertical_format, music_path):
         try:
-            tts_failures = create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, api_key=api_key, voice_id=voice_id, vertical_format=vertical_format, music_path=music_path)
+            tts_failures = create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, elevenlabs_api_key=elevenlabs_key, ocr_api_key=ocr_key, voice_id=voice_id, vertical_format=vertical_format, music_path=music_path)
 
             # This will run on the main thread after the worker is done
             def handle_result():

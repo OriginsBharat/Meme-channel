@@ -1,30 +1,38 @@
-import easyocr
 import os
+import requests
 from elevenlabs.client import ElevenLabs
 from elevenlabs import play
 from playsound import playsound
 
-# --- OCR Model Initialization ---
-print("Initializing OCR engine (easyocr)... This may take a moment.")
-try:
-    reader = easyocr.Reader(['en'])
-    print("OCR engine initialized successfully.")
-except Exception as e:
-    print(f"CRITICAL: Could not initialize OCR engine. Text extraction will not work. Error: {e}")
-    reader = None
-
-def extract_text_from_image(image_path):
-    """Extracts text from an image file using EasyOCR."""
-    if not reader:
-        print("OCR reader not available.")
+def extract_text_from_image(api_key, image_path):
+    """
+    Extracts text from an image file using the OCR.space API.
+    """
+    if not all([api_key, image_path]):
+        print("OCR Error: Missing API key or image path.")
         return ""
+
     try:
-        result = reader.readtext(image_path, detail=0, paragraph=True)
-        text = " ".join(result)
-        print(f"Extracted text: '{text.strip()}'")
-        return text.strip()
+        with open(image_path, 'rb') as f:
+            r = requests.post('https://api.ocr.space/parse/image',
+                              files={image_path: f},
+                              data={'apikey': api_key})
+        r.raise_for_status()
+        result = r.json()
+
+        if result.get('IsErroredOnProcessing'):
+            print(f"OCR.space API Error: {result.get('ErrorMessage')}")
+            return ""
+
+        parsed_text = result.get('ParsedResults', [{}])[0].get('ParsedText', '')
+        print(f"Extracted text: '{parsed_text.strip()}'")
+        return parsed_text.strip().replace('\r\n', ' ')
+
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred during OCR API call: {e}")
+        return ""
     except Exception as e:
-        print(f"An error occurred during OCR with easyocr: {e}")
+        print(f"An unexpected error occurred during OCR processing: {e}")
         return ""
 
 # --- ElevenLabs TTS Functions ---
