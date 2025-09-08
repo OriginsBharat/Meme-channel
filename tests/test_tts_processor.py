@@ -99,24 +99,30 @@ class TestElevenLabsProcessor(unittest.TestCase):
     @patch('meme_compiler.tts_processor.ElevenLabs')
     def test_generate_tts_success(self, MockElevenLabs):
         mock_client = MockElevenLabs.return_value
-        mock_client.generate.return_value = b'fake_audio_data'
+        # The convert method returns a generator/iterable of chunks
+        mock_client.text_to_speech.convert.return_value = [b'fake_audio_data']
         output_path = os.path.join(self.assets_dir, "test.mp3")
 
-        success = generate_elevenlabs_tts(self.dummy_api_key, "v1", "hello", output_path)
+        success, message = generate_elevenlabs_tts(self.dummy_api_key, "v1", "hello", output_path)
+
         self.assertTrue(success)
+        self.assertIsNone(message)
         self.assertTrue(os.path.exists(output_path))
         with open(output_path, 'rb') as f:
             self.assertEqual(f.read(), b'fake_audio_data')
+        mock_client.text_to_speech.convert.assert_called_with(voice_id="v1", text="hello")
 
     @patch('meme_compiler.tts_processor.playsound')
     @patch('meme_compiler.tts_processor.ElevenLabs')
     def test_play_voice_preview_success(self, MockElevenLabs, mock_playsound):
         mock_client = MockElevenLabs.return_value
-        mock_client.generate.return_value = b'fake_preview_audio'
+        mock_client.text_to_speech.convert.return_value = [b'fake_preview_audio']
 
         play_voice_preview(self.dummy_api_key, "v1")
+
+        mock_client.text_to_speech.convert.assert_called_with(voice_id="v1", text="Hello, this is a preview of my voice.")
         # Check that playsound was called with the temporary file
-        mock_playsound.assert_called_once()
+        mock_playsound.assert_called_once_with("temp_preview.mp3")
         # Verify the temp file was created and then removed
         self.assertFalse(os.path.exists("temp_preview.mp3"))
 

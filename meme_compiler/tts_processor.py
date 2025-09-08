@@ -65,10 +65,12 @@ def generate_elevenlabs_tts(api_key, voice_id, text, output_path):
         return (False, message)
     try:
         client = ElevenLabs(api_key=api_key)
-        audio = client.generate(text=text, voice=voice_id)
+        # The correct method is client.text_to_speech.convert() which returns a stream
+        audio_stream = client.text_to_speech.convert(voice_id=voice_id, text=text)
 
         with open(output_path, 'wb') as f:
-            f.write(audio)
+            for chunk in audio_stream:
+                f.write(chunk)
 
         print(f"TTS audio saved to {output_path}")
         return (True, None)
@@ -84,19 +86,16 @@ def play_voice_preview(api_key, voice_id):
         return
     try:
         client = ElevenLabs(api_key=api_key)
-        # Generate a short, generic preview audio
         preview_text = "Hello, this is a preview of my voice."
-        audio = client.generate(text=preview_text, voice=voice_id)
+        # Use the correct method and handle the stream
+        audio_stream = client.text_to_speech.convert(voice_id=voice_id, text=preview_text)
 
-        # Save to a temporary file to play with playsound
         temp_preview_file = "temp_preview.mp3"
         with open(temp_preview_file, "wb") as f:
-            f.write(audio)
+            for chunk in audio_stream:
+                f.write(chunk)
 
-        # Play the sound
         playsound(temp_preview_file)
-
-        # Clean up the temporary file
         os.remove(temp_preview_file)
 
     except Exception as e:
