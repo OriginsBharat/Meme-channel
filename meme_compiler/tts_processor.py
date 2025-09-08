@@ -55,10 +55,14 @@ def get_elevenlabs_voices(api_key):
         return {}
 
 def generate_elevenlabs_tts(api_key, voice_id, text, output_path):
-    """Generates an MP3 audio file from text using the ElevenLabs API."""
+    """
+    Generates an MP3 audio file from text using the ElevenLabs API.
+    Returns a tuple: (success: bool, message: str)
+    """
     if not all([api_key, voice_id, text]):
-        print("Missing API key, voice ID, or text for TTS generation.")
-        return False
+        message = "Missing API key, voice ID, or text for TTS generation."
+        print(message)
+        return (False, message)
     try:
         client = ElevenLabs(api_key=api_key)
         audio = client.generate(text=text, voice=voice_id)
@@ -67,10 +71,11 @@ def generate_elevenlabs_tts(api_key, voice_id, text, output_path):
             f.write(audio)
 
         print(f"TTS audio saved to {output_path}")
-        return True
+        return (True, None)
     except Exception as e:
-        print(f"An error occurred during ElevenLabs TTS generation: {e}")
-        return False
+        error_message = f"An error occurred during ElevenLabs TTS generation: {e}"
+        print(error_message)
+        return (False, str(e))
 
 def play_voice_preview(api_key, voice_id):
     """Generates and plays a short audio preview of a voice using the ElevenLabs API."""

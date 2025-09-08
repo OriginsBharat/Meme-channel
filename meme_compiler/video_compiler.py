@@ -94,9 +94,10 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
                     text = extract_text_from_image(path)
                     if text:
                         audio_path = os.path.join(temp_folder, f"tts_{i}.mp3")
-                        if not generate_elevenlabs_tts(api_key, voice_id, text, audio_path):
-                            print(f"Warning: TTS generation failed for '{title}'")
-                            tts_failures.append(title)
+                        success, message = generate_elevenlabs_tts(api_key, voice_id, text, audio_path)
+                        if not success:
+                            print(f"Warning: TTS generation failed for '{title}' with error: {message}")
+                            tts_failures.append((title, message))
                         else:
                             audio_clip = AudioFileClip(audio_path)
                             if audio_clip.duration > clip.duration:

@@ -440,8 +440,12 @@ class MemeCompilerApp(tk.Tk):
                 self.status_var.set("Compilation finished! Ready for a new task.")
 
                 if tts_failures:
-                    failed_titles = "\n - ".join(tts_failures)
-                    warning_message = f"The video was created, but TTS failed for the following memes:\n\n - {failed_titles}\n\nThis could be due to your ElevenLabs account being out of credits, or an issue with the text extracted from the meme."
+                    failure_details = []
+                    for title, error in tts_failures:
+                        failure_details.append(f" - {title}: {error}")
+
+                    failed_titles_str = "\n".join(failure_details)
+                    warning_message = f"The video was created, but TTS failed for the following memes:\n\n{failed_titles_str}\n\nCommon reasons include being out of credits or the API rejecting certain text/characters."
                     messagebox.showwarning("TTS Failures", warning_message)
 
             self.after(0, handle_result)

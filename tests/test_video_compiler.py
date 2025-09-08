@@ -110,7 +110,7 @@ class TestVideoCompiler(unittest.TestCase):
     @patch('shutil.rmtree')
     def test_create_video_with_tts_failure(self, mock_rmtree, mock_generate_tts, mock_composite, mock_concatenate, mock_audio, mock_video, mock_image, mock_extract_text, mock_download_file):
         # --- Mock Configuration ---
-        mock_generate_tts.return_value = False # Simulate TTS failure
+        mock_generate_tts.return_value = (False, "Test API Error") # Simulate TTS failure
         mock_download_file.return_value = "/tmp/dummy_meme.jpg"
         mock_extract_text.return_value = "some text"
 
@@ -144,7 +144,7 @@ class TestVideoCompiler(unittest.TestCase):
         # --- Assertions ---
         self.assertIsNotNone(failed_memes, "Function should not return None on TTS failure")
         self.assertEqual(len(failed_memes), 1)
-        self.assertEqual(failed_memes[0], 'Test Meme Title')
+        self.assertEqual(failed_memes[0], ('Test Meme Title', 'Test API Error'))
 
 
 if __name__ == '__main__':
