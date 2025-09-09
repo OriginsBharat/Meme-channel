@@ -8,7 +8,7 @@ A desktop application to automatically find and compile image and video memes fr
 - **Content Filtering**: Automatically skips memes you have already used in a previous video.
 - **Meme Selection & Preview**:
     - A simple UI with checkboxes to select your favorite memes.
-    - A preview pane that can display images. (Video preview temporarily disabled).
+    - A preview pane that can display images and play video/GIF memes.
 - **Fully Customizable Videos**: Use your own intro, outro, background video, and background music.
 - **High-Quality TTS**: Integrates with the **ElevenLabs API** for natural-sounding voiceovers.
 - **Tesseract OCR**: Uses the Tesseract engine for local, high-quality text extraction from memes.
