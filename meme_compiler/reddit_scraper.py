@@ -2,12 +2,14 @@ import praw
 import os
 import requests
 
-CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET")
 USER_AGENT = "MemeCompilerApp/0.1 by Jules"
 
-def get_reddit_instance():
-    return praw.Reddit(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, user_agent=USER_AGENT)
+def get_reddit_instance(client_id, client_secret):
+    """Initializes and returns a PRAW Reddit instance."""
+    if not all([client_id, client_secret]):
+        print("Reddit credentials are not configured.")
+        return None
+    return praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=USER_AGENT)
 
 def _get_image_size(url):
     try:

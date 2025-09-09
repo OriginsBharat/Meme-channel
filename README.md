@@ -16,7 +16,7 @@ A desktop application to automatically find and compile image and video memes fr
     - Integrates with the **OCR.space API** for accurate text extraction from images.
     - Integrates with the **ElevenLabs API** for natural-sounding voiceovers.
 - **Voice Previews**: Listen to a sample of each ElevenLabs voice before you compile the video.
-- **Centralized API Management**: A dedicated settings tab to manage your API keys.
+- **Centralized Settings**: A dedicated settings tab to manage all your API keys.
 - **Vertical Video Format**: An option to create videos in a 9:16 aspect ratio for platforms like YouTube Shorts and TikTok.
 
 ## Installation
@@ -35,38 +35,30 @@ A desktop application to automatically find and compile image and video memes fr
     ```bash
     pip install -r requirements.txt
     ```
-4.  **Set Environment Variables** for the Reddit API (see Usage section below).
 
 ## Usage Guide
 
-### Step 0: API Credentials
+### Step 1: Get API Credentials
 
-You need API keys for Reddit, ElevenLabs, and OCR.space.
+You need credentials for three services. The app will save them all securely in a local `config.json` file, so you only need to enter them once.
 
-#### Reddit
-1.  Go to [Reddit's app preferences](https://www.reddit.com/prefs/apps).
-2.  Create a new 'script' app.
-3.  Set your Client ID and Client Secret as **environment variables**.
+1.  **Reddit**:
+    *   Go to [Reddit's app preferences](https://www.reddit.com/prefs/apps).
+    *   Create a new 'script' app. You will get a **Client ID** and a **Client Secret**.
+2.  **ElevenLabs**:
+    *   Go to the [ElevenLabs website](https://elevenlabs.io/), sign up, and get your **API Key**.
+3.  **OCR.space**:
+    *   Go to the [OCR.space website](https://ocr.space/ocrapi) and register for a free **API Key**.
 
-#### ElevenLabs & OCR.space
-1.  Go to the [ElevenLabs website](https://elevenlabs.io/) and get an API key.
-2.  Go to the [OCR.space website](https://ocr.space/ocrapi) and register for a free API key.
-
-### Using the Application
+### Step 2: Configure and Run the App
 
 1.  **Launch the application**:
     ```bash
     python3 -m meme_compiler.app
     ```
-2.  **Configure Settings (First Run)**:
+2.  **Enter All Credentials**:
     *   Go to the **"Settings"** tab.
-    *   Paste your **ElevenLabs API Key** and **OCR.space API Key** into their respective fields.
-    *   Click **"Save All Keys & Refresh Voices"**. The app will save your keys locally in a `config.json` file.
-
-3.  **Find & Select Memes**:
-    *   In the "Compiler" tab, enter a keyword and click **"Search..."**.
-    *   Click the **"Refresh"** button to run the same search again, which will show new memes if available (and hide ones you've already used).
-    *   Use the checkboxes to select the memes you want. Click the text of a meme to see a preview.
-4.  **Add Your Files**: Select your intro, outro, background video, and optional background music.
-5.  **Finish & Compile**: Choose your TTS voice (for images), video format, and click **"Compile Video!"**.
-6.  After a video is created, the app will save the URLs of the used memes to `used_memes.txt` to prevent them from showing up in future searches.
+    *   Carefully paste your Reddit, ElevenLabs, and OCR.space credentials into the correct fields.
+    *   Click **"Save All Settings & Refresh Voices"**.
+3.  **Start Compiling!**
+    *   Go to the "Compiler" tab and start making videos. All your settings are saved for future use.
