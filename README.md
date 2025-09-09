@@ -19,8 +19,8 @@ A desktop application to automatically find memes on Reddit and compile them int
 
 This application requires the Tesseract OCR engine to be installed on your system.
 
-1.  Go to the official repository for Windows installers: [Tesseract at UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki).
-2.  Download the latest available installer (e.g., `tesseract-ocr-w64-setup-v5.x.x.exe`).
+1.  Go to the official repository for Windows installers: **[Tesseract at UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki)**.
+2.  Download the latest available installer from the links on that page (e.g., `tesseract-ocr-w64-setup-v5.x.x.exe`).
 3.  Run the installer. **It is highly recommended to install it in the default location** (e.g., `C:\Program Files\Tesseract-OCR`).
 4.  After installation, find the `tesseract.exe` file. Note this full path (e.g., `C:\Program Files\Tesseract-OCR\tesseract.exe`). You will need it inside the app.
 
