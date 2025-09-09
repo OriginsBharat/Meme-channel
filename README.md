@@ -1,30 +1,25 @@
 # Meme Video Compiler
 
-A desktop application to automatically find memes on Reddit and compile them into a short video, complete with a user-provided intro, outro, background video, background music, and a high-quality Text-to-Speech (TTS) voiceover.
+A desktop application to automatically find and compile image and video memes from Reddit into a short video, complete with a user-provided intro, outro, background video, background music, and a high-quality Text-to-Speech (TTS) voiceover for image-based memes.
 
 ## Features
 
-- **Keyword Search**: Finds memes on Reddit based on a keyword.
-- **Meme Selection**: A simple UI with checkboxes to select your favorite memes and a preview pane to view them.
+- **Keyword Search**: Finds image and video memes on Reddit based on a keyword.
+- **Content Filtering**:
+    - Automatically skips image memes larger than 1MB to work with the OCR.space API.
+    - Automatically skips memes you have already used in a previous video.
+- **Meme Selection & Preview**:
+    - A simple UI with checkboxes to select your favorite memes.
+    - A preview pane that can display images and play video/GIF memes.
 - **Fully Customizable Videos**: Use your own intro, outro, background video, and background music.
-- **High-Quality TTS**: Integrates with the ElevenLabs API for natural-sounding voiceovers.
-- **Tesseract OCR**: Uses the Tesseract engine for local, high-quality text extraction from memes.
+- **Cloud-Powered OCR & TTS**:
+    - Integrates with the **OCR.space API** for accurate text extraction from images.
+    - Integrates with the **ElevenLabs API** for natural-sounding voiceovers.
 - **Voice Previews**: Listen to a sample of each ElevenLabs voice before you compile the video.
-- **Centralized Settings**: A dedicated settings tab to manage your ElevenLabs API key and Tesseract executable path.
+- **Centralized API Management**: A dedicated settings tab to manage your API keys.
 - **Vertical Video Format**: An option to create videos in a 9:16 aspect ratio for platforms like YouTube Shorts and TikTok.
 
 ## Installation
-
-### Step 1: Install Tesseract OCR
-
-This application requires the Tesseract OCR engine to be installed on your system.
-
-1.  Go to the official repository for Windows installers: **[Tesseract at UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki)**.
-2.  Download the latest available installer from the links on that page (e.g., `tesseract-ocr-w64-setup-v5.x.x.exe`).
-3.  Run the installer. **It is highly recommended to install it in the default location** (e.g., `C:\Program Files\Tesseract-OCR`).
-4.  After installation, find the `tesseract.exe` file. Note this full path (e.g., `C:\Program Files\Tesseract-OCR\tesseract.exe`). You will need it inside the app.
-
-### Step 2: Set up the Python Environment
 
 1.  **Clone the repository**:
     ```bash
@@ -40,30 +35,24 @@ This application requires the Tesseract OCR engine to be installed on your syste
     ```bash
     pip install -r requirements.txt
     ```
+4.  **Set Environment Variables** for the Reddit API (see Usage section below).
 
-### Step 3: Set up API Credentials
+## Usage Guide
 
-You need API keys for Reddit and ElevenLabs.
+### Step 0: API Credentials
+
+You need API keys for Reddit, ElevenLabs, and OCR.space.
 
 #### Reddit
 1.  Go to [Reddit's app preferences](https://www.reddit.com/prefs/apps).
 2.  Create a new 'script' app.
-3.  Set your Client ID and Client Secret as **environment variables**:
-    *   **On Windows (PowerShell)**:
-        ```powershell
-        $env:REDDIT_CLIENT_ID="YOUR_CLIENT_ID_HERE"
-        $env:REDDIT_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
-        ```
-    *   **On macOS/Linux**:
-        ```bash
-        export REDDIT_CLIENT_ID="YOUR_CLIENT_ID_HERE"
-        export REDDIT_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
-        ```
+3.  Set your Client ID and Client Secret as **environment variables**.
 
-#### ElevenLabs
-1.  Go to the [ElevenLabs website](https://elevenlabs.io/), sign up, and get your API key from your profile.
+#### ElevenLabs & OCR.space
+1.  Go to the [ElevenLabs website](https://elevenlabs.io/) and get an API key.
+2.  Go to the [OCR.space website](https://ocr.space/ocrapi) and register for a free API key.
 
-## Usage Guide
+### Using the Application
 
 1.  **Launch the application**:
     ```bash
@@ -71,10 +60,13 @@ You need API keys for Reddit and ElevenLabs.
     ```
 2.  **Configure Settings (First Run)**:
     *   Go to the **"Settings"** tab.
-    *   Paste your **ElevenLabs API Key** into the first field.
-    *   Paste the full path to your **`tesseract.exe`** file into the second field (e.g., `C:\Program Files\Tesseract-OCR\tesseract.exe`).
-    *   Click **"Save Settings & Refresh Voices"**. The app will save your settings locally in a `config.json` file.
+    *   Paste your **ElevenLabs API Key** and **OCR.space API Key** into their respective fields.
+    *   Click **"Save All Keys & Refresh Voices"**. The app will save your keys locally in a `config.json` file.
 
-3.  **Find & Select Memes**: In the "Compiler" tab, enter a keyword, search, and use the checkboxes to select memes.
+3.  **Find & Select Memes**:
+    *   In the "Compiler" tab, enter a keyword and click **"Search..."**.
+    *   Click the **"Refresh"** button to run the same search again, which will show new memes if available (and hide ones you've already used).
+    *   Use the checkboxes to select the memes you want. Click the text of a meme to see a preview.
 4.  **Add Your Files**: Select your intro, outro, background video, and optional background music.
-5.  **Finish & Compile**: Choose your TTS voice, video format, and click **"Compile Video!"**.
+5.  **Finish & Compile**: Choose your TTS voice (for images), video format, and click **"Compile Video!"**.
+6.  After a video is created, the app will save the URLs of the used memes to `used_memes.txt` to prevent them from showing up in future searches.

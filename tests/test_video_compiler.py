@@ -45,7 +45,7 @@ class TestVideoCompiler(unittest.TestCase):
             outro_path="/tmp/outro.mp4",
             background_path="/tmp/bg.mp4",
             vertical_format=False,
-            tesseract_cmd_path="/usr/bin/tesseract"
+            ocr_api_key="dummy_ocr_key"
         )
 
         # --- Assertions ---
@@ -93,7 +93,7 @@ class TestVideoCompiler(unittest.TestCase):
             outro_path="/tmp/outro.mp4",
             background_path="/tmp/bg.mp4",
             vertical_format=True,
-            tesseract_cmd_path="/usr/bin/tesseract"
+            ocr_api_key="dummy_ocr_key"
         )
 
         # --- Assertions ---
@@ -141,7 +141,7 @@ class TestVideoCompiler(unittest.TestCase):
             outro_path="/tmp/outro.mp4",
             background_path="/tmp/bg.mp4",
             enable_tts=True,
-            tesseract_cmd_path="/usr/bin/tesseract"
+            ocr_api_key="dummy_ocr_key"
         )
 
         # --- Assertions ---

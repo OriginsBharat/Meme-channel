@@ -1,32 +1,35 @@
 import os
-import pytesseract
-from PIL import Image
+import requests
 from elevenlabs.client import ElevenLabs
 from elevenlabs import play
 from playsound import playsound
 
-def extract_text_from_image(tesseract_cmd, image_path):
+def extract_text_from_image(api_key, image_path):
     """
-    Extracts text from an image file using Tesseract OCR.
+    Extracts text from an image file using the OCR.space API.
     """
-    if not all([tesseract_cmd, image_path]):
-        print("OCR Error: Missing Tesseract command path or image path.")
+    if not all([api_key, image_path]):
+        print("OCR Error: Missing API key or image path.")
         return ""
 
     try:
-        # Set the command path for pytesseract
-        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        with open(image_path, 'rb') as f:
+            r = requests.post('https://api.ocr.space/parse/image',
+                              files={image_path: f},
+                              data={'apikey': api_key})
+        r.raise_for_status()
+        result = r.json()
 
-        # Open the image and extract text
-        text = pytesseract.image_to_string(Image.open(image_path))
+        if result.get('IsErroredOnProcessing'):
+            print(f"OCR.space API Error: {result.get('ErrorMessage')}")
+            return ""
 
-        print(f"Extracted text: '{text.strip()}'")
-        return text.strip().replace('\n', ' ') # Replace newlines with spaces for TTS
+        parsed_text = result.get('ParsedResults', [{}])[0].get('ParsedText', '')
+        print(f"Extracted text: '{parsed_text.strip()}'")
+        return parsed_text.strip().replace('\r\n', ' ')
 
-    except pytesseract.TesseractNotFoundError:
-        print("Tesseract Error: The Tesseract executable was not found.")
-        print(f"Please ensure the path in your settings is correct: '{tesseract_cmd}'")
-        # In a real app, we might want to pop up a more specific error message here.
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred during OCR API call: {e}")
         return ""
     except Exception as e:
         print(f"An unexpected error occurred during OCR processing: {e}")
