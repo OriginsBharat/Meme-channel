@@ -8,7 +8,6 @@ from io import BytesIO
 from PIL import Image, ImageTk, __version__ as PILLOW_VERSION
 
 # Monkey-patch for Pillow 10.0.0+ breaking change
-# See: https://pillow.readthedocs.io/en/stable/deprecations.html#constants
 if tuple(map(int, PILLOW_VERSION.split('.'))) >= (10, 0, 0):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
@@ -16,15 +15,14 @@ from .reddit_scraper import find_memes, get_reddit_instance
 from .video_compiler import create_video
 from .tts_processor import get_elevenlabs_subscription_info, get_elevenlabs_voices, play_voice_preview
 # --- Theme and Styling ---
-BG_COLOR = "#2a004f" # Dark Purple
+BG_COLOR = "#2a004f"
 BG_SECONDARY = "#1e0038"
 TEXT_COLOR = "#f0e8ff"
-PRIMARY_COLOR = "#ff00ff"  # Neon Pink
-SECONDARY_COLOR = "#9d00ff" # Neon Purple
+PRIMARY_COLOR = "#ff00ff"
+SECONDARY_COLOR = "#9d00ff"
 FONT_NAME = "Trebuchet MS"
 
 def fetch_image(url):
-    """Downloads an image from a URL and returns it as a PIL Image object."""
     try:
         response = requests.get(url, timeout=5)
         response.raise_for_status()
@@ -52,8 +50,8 @@ class MemeCompilerApp(tk.Tk):
         self.music_full_path = ""
         self.tts_enabled_var = tk.BooleanVar(value=True)
         self.preview_image = None
-        self.api_key = tk.StringVar()
-        self.ocr_api_key = tk.StringVar()
+        self.elevenlabs_api_key = tk.StringVar()
+        self.tesseract_cmd_path = tk.StringVar()
         self.voices_map = {}
         self.selected_voice_id = tk.StringVar()
         self.char_count_var = tk.StringVar(value="Characters Left: N/A")
@@ -80,69 +78,44 @@ class MemeCompilerApp(tk.Tk):
         self.style.configure("TNotebook.Tab", background=BG_SECONDARY, foreground=TEXT_COLOR, padding=[10, 5], font=(FONT_NAME, 11, "bold"))
         self.style.map("TNotebook.Tab", background=[("selected", PRIMARY_COLOR)], foreground=[("selected", BG_COLOR)])
 
-
         self.configure(bg=BG_COLOR)
         self.create_widgets()
         self.load_config()
 
     def create_widgets(self):
-        # --- Main Layout ---
         self.main_frame = ttk.Frame(self, padding="10")
         self.main_frame.pack(fill=tk.BOTH, expand=True)
-
         header = ttk.Label(self.main_frame, text="Meme Video Compiler", style="Header.TLabel")
         header.pack(pady=10)
-
-        # --- Character Count Display (Top Left) ---
         char_count_label = ttk.Label(header, textvariable=self.char_count_var, font=(FONT_NAME, 10))
         char_count_label.place(x=0, y=0, anchor='nw')
-
-        # --- Tabbed Interface ---
         notebook = ttk.Notebook(self.main_frame, style="TNotebook")
         notebook.pack(fill=tk.BOTH, expand=True, pady=10)
-
         compiler_tab = ttk.Frame(notebook, style="TFrame", padding=10)
         settings_tab = ttk.Frame(notebook, style="TFrame", padding=10)
-
         notebook.add(compiler_tab, text="Compiler")
         notebook.add(settings_tab, text="Settings")
-
         self.create_compiler_tab(compiler_tab)
         self.create_settings_tab(settings_tab)
-
-        # --- Status Bar ---
-        self.status_var = tk.StringVar(value="Ready. Configure your API key in Settings.")
+        self.status_var = tk.StringVar(value="Ready. Configure your API keys and Tesseract path in Settings.")
         status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor='w', padding=5)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
     def create_compiler_tab(self, parent):
-        # Create a canvas and a scrollbar
         canvas = tk.Canvas(parent, bg=BG_COLOR, highlightthickness=0)
         scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas, style="TFrame")
-
-        # Configure the canvas
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-
-        # Create a window in the canvas for the frame
         canvas_frame = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-
         def on_frame_configure(event):
-            # Update the scroll region to encompass the inner frame
             canvas.configure(scrollregion=canvas.bbox("all"))
-
         def on_canvas_configure(event):
-            # Resize the inner frame to match the canvas width
             canvas.itemconfig(canvas_frame, width=event.width)
-
         scrollable_frame.bind("<Configure>", on_frame_configure)
         canvas.bind("<Configure>", on_canvas_configure)
-
-        # --- Place all widgets inside the scrollable_frame ---
         content_frame = scrollable_frame
-
         search_group = ttk.LabelFrame(content_frame, text="Step 1: Find Memes", padding="10")
         search_group.pack(fill=tk.X, pady=5, padx=10)
         keyword_frame = ttk.Frame(search_group, style="TLabelframe")
@@ -152,11 +125,9 @@ class MemeCompilerApp(tk.Tk):
         ttk.Entry(keyword_frame, textvariable=self.keyword_var, width=40).pack(side=tk.LEFT, expand=True, fill=tk.X)
         self.search_button = ttk.Button(keyword_frame, text="Search...", command=self.start_search)
         self.search_button.pack(side=tk.RIGHT, padx=(10, 0))
-
         self.results_group = ttk.LabelFrame(content_frame, text="Step 2: Select Memes (Click text to preview)", padding="10")
         paned_window = ttk.PanedWindow(self.results_group, orient=tk.HORIZONTAL)
         paned_window.pack(fill=tk.BOTH, expand=True)
-
         list_canvas = tk.Canvas(paned_window, bg=BG_SECONDARY, highlightthickness=0)
         meme_scrollbar = ttk.Scrollbar(paned_window, orient="vertical", command=list_canvas.yview)
         self.meme_list_frame = ttk.Frame(list_canvas, style="TLabelframe")
@@ -165,77 +136,62 @@ class MemeCompilerApp(tk.Tk):
         list_canvas.configure(yscrollcommand=meme_scrollbar.set)
         paned_window.add(list_canvas, weight=1)
         paned_window.add(meme_scrollbar)
-
         preview_frame = ttk.Frame(paned_window, width=500, style="TLabelframe")
         self.preview_label = ttk.Label(preview_frame, text="Click a meme title to preview", anchor=tk.CENTER, background=BG_SECONDARY)
         self.preview_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         paned_window.add(preview_frame, weight=2)
-
         self.bottom_controls_frame = ttk.Frame(content_frame)
         self.video_group = ttk.LabelFrame(self.bottom_controls_frame, text="Step 3: Add Your Video Files", padding="10")
         self.video_group.pack(fill=tk.X, pady=5, padx=10)
-
         file_select_frame = ttk.Frame(self.video_group, style="TLabelframe")
         file_select_frame.pack(fill=tk.X)
         ttk.Button(file_select_frame, text="Select Intro", command=lambda: self.select_file('intro')).pack(side=tk.LEFT, expand=True, padx=5)
         ttk.Button(file_select_frame, text="Select Background", command=lambda: self.select_file('background')).pack(side=tk.LEFT, expand=True, padx=5)
         ttk.Button(file_select_frame, text="Select Outro", command=lambda: self.select_file('outro')).pack(side=tk.LEFT, expand=True, padx=5)
         ttk.Button(file_select_frame, text="Select BG Music", command=lambda: self.select_file('music')).pack(side=tk.LEFT, expand=True, padx=5)
-
         labels_frame = ttk.Frame(self.video_group, style="TLabelframe")
         labels_frame.pack(fill=tk.X, pady=(5,0))
         ttk.Label(labels_frame, textvariable=self.intro_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
         ttk.Label(labels_frame, textvariable=self.background_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
         ttk.Label(labels_frame, textvariable=self.outro_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
         ttk.Label(labels_frame, textvariable=self.music_path_display, wraplength=220, style="Path.TLabel").pack(side=tk.LEFT, expand=True, padx=5, anchor='w')
-
         self.compile_group = ttk.LabelFrame(self.bottom_controls_frame, text="Step 4: Finish & Compile", padding="10")
         self.compile_group.pack(fill=tk.X, pady=5, padx=10, side=tk.BOTTOM)
-
         tts_frame = ttk.Frame(self.compile_group, style="TLabelframe")
         tts_frame.pack(fill=tk.X, pady=5)
         tts_check = ttk.Checkbutton(tts_frame, text="Add TTS Voiceover for Image Memes", variable=self.tts_enabled_var, style="TCheckbutton")
         tts_check.pack(anchor='w', side=tk.LEFT)
-
         self.voice_dropdown = ttk.Combobox(tts_frame, textvariable=self.selected_voice_id, state="readonly", width=30)
         self.voice_dropdown.pack(side=tk.LEFT, padx=10, expand=True, fill=tk.X)
-
         self.preview_voice_button = ttk.Button(tts_frame, text="Preview Voice", command=self.preview_selected_voice)
         self.preview_voice_button.pack(side=tk.LEFT, padx=5)
-
         vertical_check = ttk.Checkbutton(self.compile_group, text="Create 9:16 Vertical Video (for Shorts/TikTok)", variable=self.vertical_format_var, style="TCheckbutton")
         vertical_check.pack(anchor='w', pady=5)
-
         self.compile_button = ttk.Button(self.compile_group, text="Compile Video!", command=self.start_compilation, state=tk.DISABLED)
         self.compile_button.pack(fill=tk.X, pady=5, ipady=10)
 
     def create_settings_tab(self, parent):
-        # ElevenLabs Settings
         eleven_group = ttk.LabelFrame(parent, text="ElevenLabs TTS Configuration", padding="10")
         eleven_group.pack(fill=tk.X, pady=5, padx=10)
-
         eleven_api_frame = ttk.Frame(eleven_group, style="TLabelframe")
         eleven_api_frame.pack(fill=tk.X, pady=5)
         ttk.Label(eleven_api_frame, text="ElevenLabs API Key:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
-        eleven_api_entry = ttk.Entry(eleven_api_frame, textvariable=self.api_key, width=50, show="*")
+        eleven_api_entry = ttk.Entry(eleven_api_frame, textvariable=self.elevenlabs_api_key, width=50, show="*")
         eleven_api_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
 
-        # OCR.space Settings
-        ocr_group = ttk.LabelFrame(parent, text="OCR.space Configuration", padding="10")
-        ocr_group.pack(fill=tk.X, pady=5, padx=10)
+        tesseract_group = ttk.LabelFrame(parent, text="Tesseract OCR Configuration", padding="10")
+        tesseract_group.pack(fill=tk.X, pady=5, padx=10)
+        tesseract_path_frame = ttk.Frame(tesseract_group, style="TLabelframe")
+        tesseract_path_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(tesseract_path_frame, text="Path to tesseract.exe:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
+        tesseract_path_entry = ttk.Entry(tesseract_path_frame, textvariable=self.tesseract_cmd_path, width=50)
+        tesseract_path_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
 
-        ocr_api_frame = ttk.Frame(ocr_group, style="TLabelframe")
-        ocr_api_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(ocr_api_frame, text="OCR.space API Key:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
-        ocr_api_entry = ttk.Entry(ocr_api_frame, textvariable=self.ocr_api_key, width=50, show="*")
-        ocr_api_entry.pack(side=tk.LEFT, expand=True, fill=tk.X)
-
-        # Buttons
         button_frame = ttk.Frame(parent)
         button_frame.pack(fill=tk.X, pady=10, padx=10)
-        save_button = ttk.Button(button_frame, text="Save All Keys & Refresh Voices", command=self.save_config_and_refresh)
+        save_button = ttk.Button(button_frame, text="Save Settings & Refresh Voices", command=self.save_config_and_refresh)
         save_button.pack(side=tk.LEFT, padx=5)
-        clear_button = ttk.Button(button_frame, text="Clear All Keys", command=self.clear_api_keys)
+        clear_button = ttk.Button(button_frame, text="Clear Settings", command=self.clear_settings)
         clear_button.pack(side=tk.LEFT, padx=5)
 
     def update_meme_preview(self, meme_url):
@@ -257,9 +213,7 @@ class MemeCompilerApp(tk.Tk):
             filetypes = [("Audio Files", "*.mp3 *.wav")]
         else:
             filetypes = [("Video/GIF Files", "*.mp4 *.mov *.avi *.gif")]
-
         filepath = filedialog.askopenfilename(title=f"Select {file_type.title()} File", filetypes=filetypes)
-
         if filepath:
             if file_type == 'intro':
                 self.intro_full_path = filepath
@@ -328,53 +282,50 @@ class MemeCompilerApp(tk.Tk):
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.api_key.set(config.get("elevenlabs_api_key", ""))
-                    self.ocr_api_key.set(config.get("ocr_api_key", ""))
-                if self.api_key.get():
-                    self.status_var.set("API Keys loaded. Go to Settings to refresh data if needed.")
+                    self.elevenlabs_api_key.set(config.get("elevenlabs_api_key", ""))
+                    self.tesseract_cmd_path.set(config.get("tesseract_cmd_path", ""))
+                if self.elevenlabs_api_key.get():
+                    self.status_var.set("Config loaded. Refresh ElevenLabs voices in Settings if needed.")
             else:
-                self.status_var.set("No API keys found. Please add them in the Settings tab.")
+                self.status_var.set("No config found. Please add API keys and Tesseract path in Settings.")
         except Exception as e:
             messagebox.showerror("Config Error", f"Failed to load config: {e}")
 
     def save_config_and_refresh(self):
-        eleven_key = self.api_key.get()
-        ocr_key = self.ocr_api_key.get()
-
-        if not all([eleven_key, ocr_key]):
-            messagebox.showwarning("API Keys", "Please enter both API keys before saving.")
-            return
+        eleven_key = self.elevenlabs_api_key.get()
+        tesseract_path = self.tesseract_cmd_path.get()
 
         config_data = {
             "elevenlabs_api_key": eleven_key,
-            "ocr_api_key": ocr_key
+            "tesseract_cmd_path": tesseract_path
         }
         with open(self.config_file, 'w') as f:
             json.dump(config_data, f)
 
-        messagebox.showinfo("API Keys", "API Keys saved successfully.")
-        self.status_var.set("API Key saved. Fetching voices and account info...")
-        # Run updates in a separate thread to keep UI responsive
-        threading.Thread(target=self.refresh_elevenlabs_data, daemon=True).start()
+        messagebox.showinfo("Settings Saved", "Your settings have been saved.")
 
-    def clear_api_keys(self):
-        self.api_key.set("")
-        self.ocr_api_key.set("")
+        if eleven_key:
+            self.status_var.set("Settings saved. Fetching ElevenLabs voices...")
+            threading.Thread(target=self.refresh_elevenlabs_data, daemon=True).start()
+        else:
+            self.status_var.set("Settings saved. Add ElevenLabs API key to fetch voices.")
+
+    def clear_settings(self):
+        self.elevenlabs_api_key.set("")
+        self.tesseract_cmd_path.set("")
         self.voices_map.clear()
         self.voice_dropdown['values'] = []
         self.selected_voice_id.set('')
         self.char_count_var.set("Characters Left: N/A")
         if os.path.exists(self.config_file):
             os.remove(self.config_file)
-        messagebox.showinfo("API Keys", "All API Keys have been cleared.")
-        self.status_var.set("API Keys cleared. Add new keys to use features.")
+        messagebox.showinfo("Settings Cleared", "All settings have been cleared.")
+        self.status_var.set("Settings cleared. Please configure them to proceed.")
 
     def refresh_elevenlabs_data(self):
-        key = self.api_key.get()
+        key = self.elevenlabs_api_key.get()
         if not key:
             return
-
-        # Update character count
         sub_info = get_elevenlabs_subscription_info(key)
         if sub_info:
             used = sub_info.character_count
@@ -383,8 +334,6 @@ class MemeCompilerApp(tk.Tk):
             self.after(0, lambda: self.char_count_var.set(f"Characters Left: {remaining}"))
         else:
             self.after(0, lambda: self.char_count_var.set("Characters Left: Check API Key"))
-
-        # Update voices
         self.voices_map = get_elevenlabs_voices(key)
         if self.voices_map:
             voice_names = list(self.voices_map.keys())
@@ -396,17 +345,15 @@ class MemeCompilerApp(tk.Tk):
             self.after(0, lambda: self.status_var.set("Could not fetch voices. Check API key or connection."))
 
     def preview_selected_voice(self):
-        key = self.api_key.get()
+        key = self.elevenlabs_api_key.get()
         voice_name = self.selected_voice_id.get()
         if not key or not voice_name:
             messagebox.showwarning("Preview Error", "Cannot preview voice without an API key and a selected voice.")
             return
-
         voice_id = self.voices_map.get(voice_name)
         if not voice_id:
             messagebox.showerror("Preview Error", "Could not find ID for selected voice.")
             return
-
         self.status_var.set(f"Generating preview for {voice_name}...")
         self.preview_voice_button.config(state=tk.DISABLED)
         threading.Thread(target=self._preview_worker, args=(key, voice_id), daemon=True).start()
@@ -428,15 +375,15 @@ class MemeCompilerApp(tk.Tk):
             return
 
         tts_enabled = self.tts_enabled_var.get()
-        elevenlabs_key = self.api_key.get()
-        ocr_key = self.ocr_api_key.get()
+        elevenlabs_key = self.elevenlabs_api_key.get()
+        tesseract_path = self.tesseract_cmd_path.get()
         voice_name = self.selected_voice_id.get()
         voice_id = self.voices_map.get(voice_name)
         vertical_format = self.vertical_format_var.get()
         music_path = self.music_full_path
 
-        if tts_enabled and not all([elevenlabs_key, voice_id, ocr_key]):
-            messagebox.showerror("TTS Error", "TTS is enabled, but an API key (ElevenLabs or OCR) is missing or a voice is not selected. Please check your settings.")
+        if tts_enabled and not all([elevenlabs_key, voice_id, tesseract_path]):
+            messagebox.showerror("TTS Error", "TTS is enabled, but the ElevenLabs API key, Tesseract path, or a selected voice is missing. Please check your settings.")
             return
 
         output_path = filedialog.asksaveasfilename(defaultextension=".mp4", filetypes=[("MP4 Video", "*.mp4")])
@@ -447,36 +394,29 @@ class MemeCompilerApp(tk.Tk):
 
         compilation_thread = threading.Thread(
             target=self.compilation_worker,
-            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, elevenlabs_key, ocr_key, voice_id, vertical_format, music_path),
+            args=(selected_memes, self.intro_full_path, self.outro_full_path, self.background_full_path, output_path, tts_enabled, elevenlabs_key, tesseract_path, voice_id, vertical_format, music_path),
             daemon=True
         )
         compilation_thread.start()
 
-    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, elevenlabs_key, ocr_key, voice_id, vertical_format, music_path):
+    def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, elevenlabs_key, tesseract_path, voice_id, vertical_format, music_path):
         try:
-            tts_failures = create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, elevenlabs_api_key=elevenlabs_key, ocr_api_key=ocr_key, voice_id=voice_id, vertical_format=vertical_format, music_path=music_path)
-
-            # This will run on the main thread after the worker is done
+            tts_failures = create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, elevenlabs_api_key=elevenlabs_key, tesseract_cmd_path=tesseract_path, voice_id=voice_id, vertical_format=vertical_format, music_path=music_path)
             def handle_result():
-                if tts_failures is None: # This indicates a hard crash in create_video
+                if tts_failures is None:
                     messagebox.showerror("Compilation Error", "A critical error occurred during video creation. Check the console for details.")
                     self.status_var.set("Error during compilation.")
                     return
-
                 messagebox.showinfo("Success!", f"Video compiled and saved to:\n{output}")
                 self.status_var.set("Compilation finished! Ready for a new task.")
-
                 if tts_failures:
                     failure_details = []
                     for title, error in tts_failures:
                         failure_details.append(f" - {title}: {error}")
-
                     failed_titles_str = "\n".join(failure_details)
                     warning_message = f"The video was created, but TTS failed for the following memes:\n\n{failed_titles_str}\n\nCommon reasons include being out of credits or the API rejecting certain text/characters."
                     messagebox.showwarning("TTS Failures", warning_message)
-
             self.after(0, handle_result)
-
         except Exception as e:
             self.after(0, lambda: messagebox.showerror("Compilation Error", f"An unexpected error occurred in the compilation thread: {e}"))
             self.after(0, lambda: self.status_var.set("Error during compilation."))

@@ -37,14 +37,14 @@ def _resize_and_crop_to_fill(clip, target_size):
         y_center=resized_clip.h / 2
     )
 
-def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, elevenlabs_api_key=None, ocr_api_key=None, voice_id=None, vertical_format=False, music_path=None):
+def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, elevenlabs_api_key=None, tesseract_cmd_path=None, voice_id=None, vertical_format=False, music_path=None):
     """
     Compiles a video from memes, an intro, an outro, and a background video.
 
     Args:
         ... (all previous args)
         elevenlabs_api_key (str, optional): The API key for ElevenLabs.
-        ocr_api_key (str, optional): The API key for the OCR service.
+        tesseract_cmd_path (str, optional): The file path to the Tesseract executable.
         vertical_format (bool): If True, creates a 9:16 vertical video.
         music_path (str, optional): Path to the background music file.
     """
@@ -93,7 +93,7 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
             if path.lower().endswith(('.jpg', '.jpeg', '.png')):
                 clip = ImageClip(path).set_duration(meme_clip_duration)
                 if enable_tts:
-                    text = extract_text_from_image(ocr_api_key, path)
+                    text = extract_text_from_image(tesseract_cmd_path, path)
                     if text:
                         audio_path = os.path.join(temp_folder, f"tts_{i}.mp3")
                         success, message = generate_elevenlabs_tts(elevenlabs_api_key, voice_id, text, audio_path)

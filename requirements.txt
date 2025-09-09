@@ -5,3 +5,4 @@ pyinstaller
 elevenlabs
 playsound==1.2.2
 requests
+pytesseract
