@@ -6,3 +6,7 @@ elevenlabs
 playsound==1.2.2
 requests
 tkVideo
+pytesseract
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib

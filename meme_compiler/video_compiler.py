@@ -2,6 +2,7 @@ import requests
 import os
 from moviepy.editor import *
 import moviepy.video.fx.all as vfx
+import moviepy.audio.fx.all as afx
 from urllib.parse import urlparse
 import shutil
 from .tts_processor import extract_text_from_image, generate_elevenlabs_tts
@@ -77,12 +78,32 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
                                 audio_clip = audio_clip.subclip(0, clip.duration)
                             clip = clip.set_audio(audio_clip)
             elif path.lower().endswith(('.gif', '.mp4')):
-                clip = VideoFileClip(path).set_duration(meme_clip_duration)
-                if clip.duration < meme_clip_duration and path.lower().endswith('.gif'):
+                clip = VideoFileClip(path)
+
+                # If clip is shorter than the target duration, loop it. Otherwise, trim it.
+                if clip.duration < meme_clip_duration:
                     clip = clip.fx(vfx.loop, duration=meme_clip_duration)
+                    # When looping video, we must also loop its audio
+                    if clip.audio:
+                        clip.audio = clip.audio.fx(afx.audio_loop, duration=meme_clip_duration)
+                else:
+                    clip = clip.subclip(0, meme_clip_duration)
 
             if clip:
-                clip_resized = clip.resize(width=TARGET_SIZE[0]) if vertical_format else clip.resize(width=background_clip.w * 0.9)
+                if vertical_format:
+                    # For vertical, we scale to fill the width and let the height adjust
+                    clip_resized = clip.resize(width=TARGET_SIZE[0])
+                else:
+                    # For horizontal, scale to fit within 90% of the background's dimensions
+                    bg_w, bg_h = background_clip.size
+                    scale_factor = 0.9
+                    target_w, target_h = bg_w * scale_factor, bg_h * scale_factor
+
+                    # Resize to fit while maintaining aspect ratio
+                    clip_resized = clip.resize(height=target_h)
+                    if clip_resized.w > target_w:
+                        clip_resized = clip.resize(width=target_w)
+
                 meme_clips.append(clip_resized)
 
         if not meme_clips:

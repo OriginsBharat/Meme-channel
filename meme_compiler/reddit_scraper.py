@@ -23,12 +23,14 @@ def _get_image_size(url):
 
 def find_memes(reddit, keyword, used_memes_log, limit=25, min_upvotes=500):
     memes = []
-    used_urls = set()
+    session_urls = set() # To track URLs found in the current session
 
-    # Load used memes from log file
+    # Load used memes from the persistent log file
     if os.path.exists(used_memes_log):
         with open(used_memes_log, 'r') as f:
             used_urls = set(line.strip() for line in f)
+    else:
+        used_urls = set()
 
     try:
         subreddits = [subreddit.display_name for subreddit in reddit.subreddits.search(keyword, limit=5)]
@@ -40,9 +42,13 @@ def find_memes(reddit, keyword, used_memes_log, limit=25, min_upvotes=500):
         for sub_name in subreddits:
             subreddit = reddit.subreddit(sub_name)
             print(f"Searching for '{keyword}' in r/{sub_name}...")
-            search_results = subreddit.search(keyword, sort="relevance", time_filter="year", limit=limit)
+            # Increased search limit to get more diverse results before filtering
+            search_results = subreddit.search(keyword, sort="relevance", time_filter="year", limit=limit * 2)
 
             for post in search_results:
+                if len(memes) >= limit:
+                    break # Stop once we have enough memes
+
                 is_image = post.url.endswith(('.jpg', '.jpeg', '.png'))
                 is_gif = post.url.endswith('.gif')
                 is_video = hasattr(post, 'is_video') and post.is_video
@@ -53,16 +59,9 @@ def find_memes(reddit, keyword, used_memes_log, limit=25, min_upvotes=500):
                         url_to_use = post.media['reddit_video']['fallback_url']
 
                     # --- Filtering Logic ---
-                    # 1. Avoid duplicates in this session and from the log file
-                    if url_to_use in used_urls or any(m['url'] == url_to_use for m in memes):
+                    # Avoid duplicates from the log file and the current session
+                    if url_to_use in used_urls or url_to_use in session_urls:
                         continue
-
-                    # 2. For images, check if they are under 1MB for the OCR API
-                    if is_image:
-                        size_in_bytes = _get_image_size(url_to_use)
-                        if size_in_bytes > 1 * 1024 * 1024: # 1 MB
-                            print(f"Skipping large image (>1MB): {post.title}")
-                            continue
 
                     memes.append({
                         "title": post.title,
@@ -70,7 +69,11 @@ def find_memes(reddit, keyword, used_memes_log, limit=25, min_upvotes=500):
                         "subreddit": sub_name,
                         "upvotes": post.score
                     })
+                    session_urls.add(url_to_use) # Add to session tracker
                     print(f"Found meme: {post.title} ({post.score} upvotes)")
+
+            if len(memes) >= limit:
+                break # Stop searching other subreddits if we have enough
 
     except Exception as e:
         print(f"An error occurred during Reddit search: {e}")

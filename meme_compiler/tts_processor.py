@@ -2,8 +2,8 @@ import os
 import pytesseract
 from PIL import Image
 from elevenlabs.client import ElevenLabs
-from elevenlabs import play
 from playsound import playsound
+import tempfile
 
 def extract_text_from_image(tesseract_cmd, image_path):
     """
@@ -60,14 +60,26 @@ def generate_elevenlabs_tts(api_key, voice_id, text, output_path):
 
 def play_voice_preview(api_key, voice_id):
     if not all([api_key, voice_id]): return
+
+    # Use a temporary file to avoid conflicts
+    temp_fd, temp_path = tempfile.mkstemp(suffix=".mp3")
+    os.close(temp_fd) # Close the file descriptor
+
     try:
         client = ElevenLabs(api_key=api_key)
-        audio_stream = client.text_to_speech.convert(voice_id=voice_id, text="Hello, this is a preview of my voice.")
-        temp_file = "temp_preview.mp3"
-        with open(temp_file, "wb") as f:
+        # A shorter, more pleasant preview text
+        preview_text = "The quick brown fox jumps over the lazy dog."
+        audio_stream = client.text_to_speech.convert(voice_id=voice_id, text=preview_text)
+
+        with open(temp_path, "wb") as f:
             for chunk in audio_stream:
                 f.write(chunk)
-        playsound(temp_file)
-        os.remove(temp_file)
+
+        playsound(temp_path)
+
     except Exception as e:
         print(f"An error occurred during voice preview: {e}")
+    finally:
+        # Ensure the temporary file is always deleted
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
