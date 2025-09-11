@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
 import os
+import configparser
 from reddit_scraper import find_memes, get_reddit_instance
 from video_compiler import create_video
 from tts_processor import get_available_voices
@@ -28,6 +29,10 @@ class MemeCompilerApp(tk.Tk):
         self.tts_enabled_var = tk.BooleanVar(value=True)
         self.voices_map = get_available_voices()
         self.selected_voice_name = tk.StringVar()
+        self.client_id_var = tk.StringVar()
+        self.client_secret_var = tk.StringVar()
+        self.user_agent_var = tk.StringVar()
+
 
         # --- Style Configuration ---
         self.style = ttk.Style(self)
@@ -47,21 +52,34 @@ class MemeCompilerApp(tk.Tk):
 
         self.configure(bg=BG_COLOR)
         self.create_widgets()
+        self.load_config()
 
     def create_widgets(self):
-        self.main_frame = ttk.Frame(self, padding="10")
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        # --- Main Layout ---
+        header = ttk.Label(self, text="Meme Video Compiler", style="Header.TLabel", anchor="center")
+        header.pack(pady=10, fill=tk.X)
 
-        header = ttk.Label(self.main_frame, text="Meme Video Compiler", style="Header.TLabel")
-        header.pack(pady=10)
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(expand=True, fill='both', padx=10, pady=5)
 
+        compiler_tab = ttk.Frame(self.notebook, padding="10")
+        settings_tab = ttk.Frame(self.notebook, padding="10")
+
+        self.notebook.add(compiler_tab, text='Compiler')
+        self.notebook.add(settings_tab, text='Settings')
+
+        self._create_compiler_tab(compiler_tab)
+        self._create_settings_tab(settings_tab)
+
+        # --- Status Bar ---
+        self.status_var = tk.StringVar(value="Ready. Check settings and then enter a keyword to start.")
+        status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor='w', padding=5)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def _create_compiler_tab(self, parent):
         # --- Step 1: Search ---
-        search_group = ttk.LabelFrame(self.main_frame, text="Step 1: Find Memes", padding="10")
-        search_group.pack(fill=tk.X, pady=5, padx=10)
-
-        self.client_id_var = tk.StringVar(value=os.environ.get("REDDIT_CLIENT_ID", ""))
-        self.client_secret_var = tk.StringVar(value=os.environ.get("REDDIT_CLIENT_SECRET", ""))
-        self.user_agent_var = tk.StringVar(value=os.environ.get("REDDIT_USER_AGENT", "MemeCompiler/0.1"))
+        search_group = ttk.LabelFrame(parent, text="Step 1: Find Memes", padding="10")
+        search_group.pack(fill=tk.X, pady=5)
 
         keyword_frame = ttk.Frame(search_group, style="TLabelframe")
         keyword_frame.pack(fill=tk.X)
@@ -72,7 +90,7 @@ class MemeCompilerApp(tk.Tk):
         self.search_button.pack(side=tk.RIGHT, padx=(10, 0))
 
         # --- Step 2: Select Memes (Initially Hidden) ---
-        self.results_group = ttk.LabelFrame(self.main_frame, text="Step 2: Select Your Memes", padding="10")
+        self.results_group = ttk.LabelFrame(parent, text="Step 2: Select Your Memes", padding="10")
         self.results_listbox = tk.Listbox(self.results_group, bg="#333", fg=TEXT_COLOR, selectbackground=SECONDARY_COLOR, height=10, selectmode=tk.MULTIPLE, relief=tk.FLAT)
         self.results_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
         scrollbar = ttk.Scrollbar(self.results_group, orient=tk.VERTICAL, command=self.results_listbox.yview)
@@ -81,7 +99,7 @@ class MemeCompilerApp(tk.Tk):
         self.results_listbox.bind('<<ListboxSelect>>', self.check_compilation_readiness)
 
         # --- Step 3: Add Videos ---
-        self.video_group = ttk.LabelFrame(self.main_frame, text="Step 3: Add Your Video Files", padding="10")
+        self.video_group = ttk.LabelFrame(parent, text="Step 3: Add Your Video Files", padding="10")
         file_select_frame = ttk.Frame(self.video_group, style="TLabelframe")
         file_select_frame.pack(fill=tk.X)
         ttk.Button(file_select_frame, text="Select Intro", command=lambda: self.select_file(self.intro_path, "Intro")).pack(side=tk.LEFT, expand=True, padx=5)
@@ -94,7 +112,7 @@ class MemeCompilerApp(tk.Tk):
         ttk.Label(labels_frame, textvariable=self.outro_path, wraplength=280, style="TLabelframe.Label").pack(side=tk.LEFT, expand=True, padx=5)
 
         # --- Step 4: Compile (Initially Hidden) ---
-        self.compile_group = ttk.LabelFrame(self.main_frame, text="Step 4: Finish & Compile", padding="10")
+        self.compile_group = ttk.LabelFrame(parent, text="Step 4: Finish & Compile", padding="10")
         tts_options_frame = ttk.Frame(self.compile_group, style="TLabelframe")
         tts_options_frame.pack(fill=tk.X, pady=5)
         tts_check = ttk.Checkbutton(tts_options_frame, text="Add TTS Voiceover", variable=self.tts_enabled_var, style="TCheckbutton")
@@ -106,11 +124,6 @@ class MemeCompilerApp(tk.Tk):
         voice_menu.pack(side=tk.LEFT, expand=True, fill=tk.X)
         self.compile_button = ttk.Button(self.compile_group, text="Compile Video!", command=self.start_compilation)
         self.compile_button.pack(fill=tk.X, pady=5, ipady=10)
-
-        # --- Status Bar ---
-        self.status_var = tk.StringVar(value="Ready. Enter a keyword to start.")
-        status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor='w', padding=5)
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
     def select_file(self, var, file_type):
         filepath = filedialog.askopenfilename(title=f"Select {file_type} File", filetypes=[("Video/GIF Files", "*.mp4 *.mov *.avi *.gif"), ("All files", "*.*")])
@@ -131,7 +144,10 @@ class MemeCompilerApp(tk.Tk):
 
     def search_worker(self):
         try:
-            reddit = get_reddit_instance() # Assumes credentials are set via env vars for now
+            client_id = self.client_id_var.get()
+            client_secret = self.client_secret_var.get()
+            user_agent = self.user_agent_var.get()
+            reddit = get_reddit_instance(client_id, client_secret, user_agent)
             self.found_memes = find_memes(reddit, self.keyword_var.get())
             self.after(0, self.update_results_list)
         except Exception as e:
@@ -197,6 +213,52 @@ class MemeCompilerApp(tk.Tk):
         finally:
             self.after(0, lambda: self.compile_button.config(state=tk.NORMAL))
 
+    def _create_settings_tab(self, parent):
+        # --- Reddit API Settings ---
+        api_group = ttk.LabelFrame(parent, text="Reddit API Credentials", padding="10")
+        api_group.pack(fill=tk.X, pady=5)
+
+        ttk.Label(api_group, text="Client ID:").grid(row=0, column=0, sticky='w', pady=2)
+        ttk.Entry(api_group, textvariable=self.client_id_var, width=60).grid(row=0, column=1, sticky='we', pady=2)
+
+        ttk.Label(api_group, text="Client Secret:").grid(row=1, column=0, sticky='w', pady=2)
+        ttk.Entry(api_group, textvariable=self.client_secret_var, width=60, show="*").grid(row=1, column=1, sticky='we', pady=2)
+
+        ttk.Label(api_group, text="User Agent:").grid(row=2, column=0, sticky='w', pady=2)
+        ttk.Entry(api_group, textvariable=self.user_agent_var, width=60).grid(row=2, column=1, sticky='we', pady=2)
+
+        api_group.columnconfigure(1, weight=1)
+
+        # --- Save Button ---
+        save_button = ttk.Button(parent, text="Save Settings", command=self.save_config)
+        save_button.pack(pady=15, ipady=5, fill=tk.X)
+
+    def load_config(self):
+        config = configparser.ConfigParser()
+        if not os.path.exists('config.ini'):
+            self.user_agent_var.set("MemeCompiler/0.1 by YourUsername") # Default
+            return
+
+        config.read('config.ini')
+        if 'Reddit' in config:
+            self.client_id_var.set(config['Reddit'].get('client_id', ''))
+            self.client_secret_var.set(config['Reddit'].get('client_secret', ''))
+            self.user_agent_var.set(config['Reddit'].get('user_agent', ''))
+            self.status_var.set("Loaded settings from config.ini.")
+
+    def save_config(self):
+        config = configparser.ConfigParser()
+        config['Reddit'] = {
+            'client_id': self.client_id_var.get(),
+            'client_secret': self.client_secret_var.get(),
+            'user_agent': self.user_agent_var.get()
+        }
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+        self.status_var.set("Configuration saved successfully!")
+        messagebox.showinfo("Settings Saved", "Your Reddit API settings have been saved to config.ini.")
+
+
 from .dependency_handler import check_dependencies
 
 if __name__ == "__main__":
@@ -210,13 +272,6 @@ if __name__ == "__main__":
         root.destroy()
         exit()
 
-    # 2. A check for Reddit credentials could be added here
-    if not all([os.environ.get("REDDIT_CLIENT_ID"), os.environ.get("REDDIT_CLIENT_SECRET")]):
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showwarning("Missing Credentials", "Reddit API credentials are not set in environment variables. Please set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET for the app to work.")
-        root.destroy()
-        # We don't exit here, as the user might want to see the UI anyway.
-
+    # 2. A check for Reddit credentials is now handled via the Settings tab.
     app = MemeCompilerApp()
     app.mainloop()

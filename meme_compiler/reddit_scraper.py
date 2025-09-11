@@ -1,20 +1,26 @@
 import praw
 import os
 
-# It's recommended to use environment variables for credentials
-# For now, we will use placeholders. The final app will have input fields for these.
-# IMPORTANT: The user will need to get their own Reddit API credentials.
-# You can get them by creating an app on Reddit: https://www.reddit.com/prefs/apps
-CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID", "YOUR_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET", "YOUR_CLIENT_SECRET")
-USER_AGENT = os.environ.get("REDDIT_USER_AGENT", "MemeCompilerApp/0.1 by YourUsername")
 
-def get_reddit_instance():
-    """Initializes and returns a PRAW Reddit instance."""
+def get_reddit_instance(client_id, client_secret, user_agent):
+    """
+    Initializes and returns a PRAW Reddit instance.
+
+    Args:
+        client_id (str): Your Reddit app's client ID.
+        client_secret (str): Your Reddit app's client secret.
+        user_agent (str): A unique user agent string.
+
+    Returns:
+        An authenticated PRAW Reddit instance or None if credentials are not provided.
+    """
+    if not all([client_id, client_secret, user_agent]):
+        raise ValueError("Reddit API credentials are not fully provided.")
+
     return praw.Reddit(
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        user_agent=USER_AGENT,
+        client_id=client_id,
+        client_secret=client_secret,
+        user_agent=user_agent,
     )
 
 def find_memes(reddit, keyword, limit=25, min_upvotes=500):
@@ -65,16 +71,25 @@ def find_memes(reddit, keyword, limit=25, min_upvotes=500):
     return memes
 
 if __name__ == '__main__':
-    # This is for testing the scraper directly
-    reddit = get_reddit_instance()
-    # A sample keyword
-    keyword_to_search = "memes"
-    found_memes = find_memes(reddit, keyword_to_search)
+    # This is for testing the scraper directly.
+    # It requires REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, and REDDIT_USER_AGENT env vars.
+    client_id = os.environ.get("REDDIT_CLIENT_ID")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    user_agent = os.environ.get("REDDIT_USER_AGENT")
 
-    if found_memes:
-        print(f"\nFound {len(found_memes)} memes for '{keyword_to_search}':")
-        for meme in found_memes:
-            print(f"- {meme['title']} ({meme['url']})")
+    if not all([client_id, client_secret, user_agent]):
+        print("Please set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, and REDDIT_USER_AGENT env vars to test.")
     else:
-        print(f"No memes found for '{keyword_to_search}'. "
-              f"Try checking your Reddit API credentials or using a different keyword.")
+        try:
+            reddit = get_reddit_instance(client_id, client_secret, user_agent)
+            keyword_to_search = "memes"
+            found_memes = find_memes(reddit, keyword_to_search)
+
+            if found_memes:
+                print(f"\nFound {len(found_memes)} memes for '{keyword_to_search}':")
+                for meme in found_memes:
+                    print(f"- {meme['title']} ({meme['url']})")
+            else:
+                print(f"No memes found for '{keyword_to_search}'.")
+        except Exception as e:
+            print(f"An error occurred during testing: {e}")
