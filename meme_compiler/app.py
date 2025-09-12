@@ -270,7 +270,9 @@ class MemeCompilerApp(tk.Tk):
             self.meme_widgets[meme['url']] = var
 
     def update_meme_preview(self, url):
-        if self.video_player: self.video_player.stop(), self.video_player = None
+        if self.video_player:
+            self.video_player.stop()
+            self.video_player = None
         self.image_preview_label.pack_forget(), self.video_preview_label.pack_forget()
         is_video = url.endswith(('.mp4', '.gif'))
         if is_video:
