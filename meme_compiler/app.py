@@ -431,10 +431,16 @@ class MemeCompilerApp(tk.Tk):
 
 
 import logging
+import os
+import imageio_ffmpeg
 from .dependency_handler import check_dependencies
 
 if __name__ == "__main__":
-    # 1. Configure logging
+    # 1. Configure FFmpeg path for moviepy
+    # This tells moviepy to use the ffmpeg executable that imageio-ffmpeg downloaded
+    os.environ['FFMPEG_BINARY'] = imageio_ffmpeg.get_ffmpeg_exe()
+
+    # 2. Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(module)s - %(message)s',

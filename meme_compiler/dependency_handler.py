@@ -11,13 +11,7 @@ def check_dependencies():
     missing = []
     error_message = ""
 
-    # 1. Check for FFmpeg
-    if shutil.which('ffmpeg') is None:
-        missing.append("FFmpeg")
-        error_message += "FFmpeg is required for all video processing.\n"
-        error_message += "Please download it from https://ffmpeg.org/download.html and ensure it's in your system's PATH.\n\n"
-
-    # 2. Check for Tesseract
+    # 1. Check for Tesseract
     if not is_tesseract_installed():
         missing.append("Tesseract OCR")
         error_message += "Tesseract is required for reading text from memes.\n"

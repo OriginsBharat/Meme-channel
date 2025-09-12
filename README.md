@@ -21,7 +21,6 @@ There are two ways to use this application: by running a pre-built executable (e
 1.  Navigate to the **"Releases"** page on this GitHub repository.
 2.  Download the `MemeCompiler` executable for your operating system (e.g., `MemeCompiler.exe` for Windows).
 3.  **Install System Dependencies**: Before running the app, you need to install the following if you don't already have them:
-    *   **FFmpeg**: Required for video processing. [Download FFmpeg](https://ffmpeg.org/download.html) and ensure it's accessible in your system's PATH.
     *   **Tesseract OCR**: Required for reading text from images. [Tesseract Installation Guide](https://github.com/tesseract-ocr/tesseract).
     *   **eSpeak / eSpeak-NG** (Linux users only): Required for the TTS engine. You can usually install it with `sudo apt-get install espeak`.
 4.  Run the `MemeCompiler` executable and follow the Usage Guide below.
@@ -42,7 +41,7 @@ There are two ways to use this application: by running a pre-built executable (e
     ```bash
     pip install -r requirements.txt
     ```
-4.  **Install system dependencies** as described in Method 1 (FFmpeg, Tesseract, and eSpeak if on Linux).
+4.  **Install system dependencies** as described in Method 1 (Tesseract and eSpeak if on Linux).
 5.  **Run the application**:
     ```bash
     python -m meme_compiler.app
