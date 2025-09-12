@@ -6,9 +6,9 @@ import shutil
 import configparser
 import praw
 from PIL import Image, ImageTk
-from reddit_scraper import find_memes, get_reddit_instance
-from video_compiler import create_video
-from tts_processor import get_available_voices
+from .reddit_scraper import find_memes, get_reddit_instance
+from .video_compiler import create_video
+from .tts_processor import get_available_voices
 
 # --- Reusable Components ---
 
