@@ -1,79 +1,154 @@
 import os
 import sys
-import shutil
+import unittest
+from unittest.mock import patch, MagicMock, call
 
 # Add the parent directory to the path to allow importing the main modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from meme_compiler.video_compiler import create_video
 
+class TestVideoCompiler(unittest.TestCase):
+
+    @patch('meme_compiler.video_compiler.download_file')
+    @patch('meme_compiler.video_compiler.ImageClip')
+    @patch('meme_compiler.video_compiler.VideoFileClip')
+    @patch('meme_compiler.video_compiler.AudioFileClip')
+    @patch('meme_compiler.video_compiler.concatenate_videoclips')
+    @patch('meme_compiler.video_compiler.CompositeVideoClip')
+    @patch('shutil.rmtree')
+    def test_create_video_logic_horizontal(self, mock_rmtree, mock_composite, mock_concatenate, mock_audio, mock_video, mock_image, mock_download_file):
+        # --- Mock Configuration ---
+        mock_clip = MagicMock()
+        mock_clip.w = 1920
+        mock_clip.h = 1080
+        mock_clip.duration = 10
+        mock_clip.audio = None
+        mock_clip.resize.return_value = mock_clip
+        mock_clip.set_duration.return_value = mock_clip
+        mock_clip.set_audio.return_value = mock_clip
+        mock_clip.subclip.return_value = mock_clip
+        mock_image.return_value = mock_clip
+        mock_video.return_value = mock_clip
+        mock_audio.return_value = mock_clip
+        mock_concatenate.return_value = mock_clip
+        mock_composite.return_value = mock_clip
+        mock_download_file.return_value = "/tmp/dummy_meme.jpg"
+
+        # --- Test Data ---
+        sample_memes = [{'url': 'http://i.redd.it/meme.jpg', 'title': 'Horizontal Test'}]
+        
+        # --- Function Call ---
+        create_video(
+            selected_memes=sample_memes,
+            intro_path="/tmp/intro.mp4",
+            outro_path="/tmp/outro.mp4",
+            background_path="/tmp/bg.mp4",
+            vertical_format=False,
+            ocr_api_key="dummy_ocr_key"
+        )
+
+        # --- Assertions ---
+        mock_download_file.assert_called_with('http://i.redd.it/meme.jpg', 'temp_media')
+        mock_video.assert_any_call("/tmp/intro.mp4")
+        expected_width = 1920 * 0.9
+        mock_clip.resize.assert_any_call(width=expected_width)
+        mock_clip.write_videofile.assert_called_once()
+
+
+    @patch('meme_compiler.video_compiler.download_file')
+    @patch('meme_compiler.video_compiler.ImageClip')
+    @patch('meme_compiler.video_compiler.VideoFileClip')
+    @patch('meme_compiler.video_compiler.AudioFileClip')
+    @patch('meme_compiler.video_compiler.concatenate_videoclips')
+    @patch('meme_compiler.video_compiler.CompositeVideoClip')
+    @patch('meme_compiler.video_compiler.vfx')
+    @patch('shutil.rmtree')
+    def test_create_video_logic_vertical(self, mock_rmtree, mock_vfx, mock_composite, mock_concatenate, mock_audio, mock_video, mock_image, mock_download_file):
+        # --- Mock Configuration ---
+        mock_clip = MagicMock()
+        mock_clip.w = 1920
+        mock_clip.h = 1080
+        mock_clip.duration = 10
+        mock_clip.audio = None
+        mock_clip.resize.return_value = mock_clip
+        mock_clip.set_duration.return_value = mock_clip
+        mock_clip.set_audio.return_value = mock_clip
+        mock_clip.subclip.return_value = mock_clip
+        mock_vfx.crop.return_value = mock_clip
+        mock_image.return_value = mock_clip
+        mock_video.return_value = mock_clip
+        mock_audio.return_value = mock_clip
+        mock_concatenate.return_value = mock_clip
+        mock_composite.return_value = mock_clip
+        mock_download_file.return_value = "/tmp/dummy_meme.jpg"
+
+        # --- Test Data ---
+        sample_memes = [{'url': 'http://i.redd.it/meme.jpg', 'title': 'Vertical Test'}]
+        
+        # --- Function Call ---
+        create_video(
+            selected_memes=sample_memes,
+            intro_path="/tmp/intro.mp4",
+            outro_path="/tmp/outro.mp4",
+            background_path="/tmp/bg.mp4",
+            vertical_format=True,
+            ocr_api_key="dummy_ocr_key"
+        )
+
+        # --- Assertions ---
+        mock_clip.resize.assert_any_call(width=1080)
+        self.assertGreaterEqual(mock_vfx.crop.call_count, 3)
+        mock_clip.write_videofile.assert_called_once()
+
+    @patch('meme_compiler.video_compiler.download_file')
+    @patch('meme_compiler.video_compiler.extract_text_from_image')
+    @patch('meme_compiler.video_compiler.ImageClip')
+    @patch('meme_compiler.video_compiler.VideoFileClip')
+    @patch('meme_compiler.video_compiler.AudioFileClip')
+    @patch('meme_compiler.video_compiler.concatenate_videoclips')
+    @patch('meme_compiler.video_compiler.CompositeVideoClip')
+    @patch('meme_compiler.video_compiler.generate_elevenlabs_tts')
+    @patch('shutil.rmtree')
+    def test_create_video_with_tts_failure(self, mock_rmtree, mock_generate_tts, mock_composite, mock_concatenate, mock_audio, mock_video, mock_image, mock_extract_text, mock_download_file):
+        # --- Mock Configuration ---
+        mock_generate_tts.return_value = (False, "Test API Error") # Simulate TTS failure
+        mock_download_file.return_value = "/tmp/dummy_meme.jpg"
+        mock_extract_text.return_value = "some text"
+
+        # Configure mocks with all necessary attributes to prevent comparison errors
+        mock_image_clip = MagicMock(duration=10, audio=None)
+        mock_image_clip.set_duration.return_value = mock_image_clip
+        mock_image_clip.resize.return_value = mock_image_clip 
+        mock_image.return_value = mock_image_clip
+        
+        mock_video_clip = MagicMock(duration=10, audio=None, w=100, h=100)
+        mock_video_clip.subclip.return_value = mock_video_clip
+        mock_video_clip.fx.return_value = mock_video_clip
+        mock_video.return_value = mock_video_clip
+        
+        mock_final_clip = MagicMock()
+        mock_concatenate.return_value = mock_final_clip
+        mock_composite.return_value = mock_final_clip
+
+        # --- Test Data ---
+        sample_memes = [{'url': 'http://i.redd.it/meme.jpg', 'title': 'Test Meme Title'}]
+        
+        # --- Function Call ---
+        failed_memes = create_video(
+            selected_memes=sample_memes,
+            intro_path="/tmp/intro.mp4",
+            outro_path="/tmp/outro.mp4",
+            background_path="/tmp/bg.mp4",
+            enable_tts=True,
+            ocr_api_key="dummy_ocr_key"
+        )
+
+        # --- Assertions ---
+        self.assertIsNotNone(failed_memes, "Function should not return None on TTS failure")
+        self.assertEqual(len(failed_memes), 1)
+        self.assertEqual(failed_memes[0], ('Test Meme Title', 'Test API Error'))
+
+
 if __name__ == '__main__':
-    print("--- Running Video Compiler Test ---")
-    # This test is designed to check the pre-processing and dependency checks,
-    # it is expected to fail during the actual video processing with dummy files.
-
-    # This import is here because Pillow is a dependency of the main app, not the test itself
-    from PIL import Image, ImageDraw, ImageFont
-
-    # --- Setup Test Assets ---
-    assets_dir = 'test_assets'
-    if not os.path.exists(assets_dir):
-        os.makedirs(assets_dir)
-
-    # 1. Create a test image with text
-    try:
-        img = Image.new('RGB', (500, 150), color=(255, 255, 255))
-        draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype("DejaVuSans.ttf", 40)
-        except IOError:
-            print("Default font not found. Using basic font.")
-            font = ImageFont.load_default()
-        draw.text((10, 10), "This is a test meme\nwith two lines of text.", fill=(0, 0, 0), font=font)
-        test_image_path = os.path.join(assets_dir, "test_meme_image.png")
-        img.save(test_image_path)
-        print(f"Created test image at: {test_image_path}")
-    except Exception as e:
-        print(f"Failed to create test image. Cannot run test. Error: {e}")
-        exit()
-
-    # 2. Create dummy video files
-    intro_path = os.path.join(assets_dir, "intro.mp4")
-    outro_path = os.path.join(assets_dir, "outro.mp4")
-    bg_path = os.path.join(assets_dir, "background.mp4")
-    with open(intro_path, 'w') as f: f.write('dummy')
-    with open(outro_path, 'w') as f: f.write('dummy')
-    with open(bg_path, 'w') as f: f.write('dummy')
-    print("Created dummy video files.")
-
-    # 3. Define test data
-    sample_memes = [{'url': test_image_path}] # Using the local file path
-    output_video_path = "test_output_video.mp4"
-
-    # --- Run the Test ---
-    print("\n--- Calling create_video with TTS enabled ---")
-    try:
-        # We need to check for dependencies first, like the main app does
-        from meme_compiler.dependency_handler import check_dependencies
-        deps_error = check_dependencies()
-        if deps_error:
-            print("Dependency check failed. The app would normally exit.")
-            print(deps_error)
-            # We will continue the test to check video logic, but TTS should be skipped.
-
-        create_video(sample_memes, intro_path, outro_path, bg_path, output_video_path, enable_tts=True)
-    except Exception as e:
-        print(f"\nCaught expected exception during moviepy processing: {type(e).__name__}: {e}")
-
-    # --- Cleanup ---
-    finally:
-        print("\n--- Cleaning up test assets ---")
-        if os.path.exists(assets_dir):
-            shutil.rmtree(assets_dir)
-            print(f"Removed test assets directory: {assets_dir}")
-        if os.path.exists(output_video_path):
-            os.remove(output_video_path)
-            print(f"Removed test output video: {output_video_path}")
-        # The create_video function should clean its own temp_media folder
-
-    print("\n--- Video Compiler Test Finished ---")
+    unittest.main()
