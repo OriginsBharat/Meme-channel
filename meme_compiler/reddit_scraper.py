@@ -1,80 +1,81 @@
 import praw
 import os
+import requests
 
-# It's recommended to use environment variables for credentials
-# For now, we will use placeholders. The final app will have input fields for these.
-# IMPORTANT: The user will need to get their own Reddit API credentials.
-# You can get them by creating an app on Reddit: https://www.reddit.com/prefs/apps
-CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID", "YOUR_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET", "YOUR_CLIENT_SECRET")
-USER_AGENT = os.environ.get("REDDIT_USER_AGENT", "MemeCompilerApp/0.1 by YourUsername")
+USER_AGENT = "MemeCompilerApp/0.1 by Jules"
 
-def get_reddit_instance():
+def get_reddit_instance(client_id, client_secret):
     """Initializes and returns a PRAW Reddit instance."""
-    return praw.Reddit(
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        user_agent=USER_AGENT,
-    )
+    if not all([client_id, client_secret]):
+        print("Reddit credentials are not configured.")
+        return None
+    return praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=USER_AGENT)
 
-def find_memes(reddit, keyword, limit=25, min_upvotes=500):
-    """
-    Finds memes on Reddit based on a keyword.
+def _get_image_size(url):
+    try:
+        response = requests.head(url, timeout=5)
+        response.raise_for_status()
+        size = int(response.headers.get('Content-Length', 0))
+        return size
+    except Exception as e:
+        print(f"Could not get size for {url}: {e}")
+        return -1
 
-    Args:
-        reddit: An authenticated PRAW Reddit instance.
-        keyword (str): The keyword to search for.
-        limit (int): The number of posts to fetch from each subreddit.
-        min_upvotes (int): The minimum number of upvotes a post must have.
-
-    Returns:
-        A list of dictionaries, where each dictionary contains post title and url.
-    """
+def find_memes(reddit, keyword, used_memes_log, limit=25, min_upvotes=500):
     memes = []
+    session_urls = set() # To track URLs found in the current session
 
-    # Search for subreddits related to the keyword
+    # Load used memes from the persistent log file
+    if os.path.exists(used_memes_log):
+        with open(used_memes_log, 'r') as f:
+            used_urls = set(line.strip() for line in f)
+    else:
+        used_urls = set()
+
     try:
         subreddits = [subreddit.display_name for subreddit in reddit.subreddits.search(keyword, limit=5)]
         if not subreddits:
             print(f"No subreddits found for keyword: {keyword}")
             return []
-
         print(f"Found subreddits: {', '.join(subreddits)}")
 
         for sub_name in subreddits:
             subreddit = reddit.subreddit(sub_name)
-            # Get top posts from the last week
-            hot_posts = subreddit.hot(limit=limit)
+            print(f"Searching for '{keyword}' in r/{sub_name}...")
+            # Increased search limit to get more diverse results before filtering
+            search_results = subreddit.search(keyword, sort="relevance", time_filter="year", limit=limit * 2)
+            
+            for post in search_results:
+                if len(memes) >= limit:
+                    break # Stop once we have enough memes
 
-            for post in hot_posts:
-                if post.score >= min_upvotes and not post.is_self and not post.stickied:
-                    # Check if it's an image or a reddit-hosted video
-                    if post.url.endswith(('.jpg', '.jpeg', '.png', '.gif')) or 'v.redd.it' in post.url:
-                        memes.append({
-                            "title": post.title,
-                            "url": post.url,
-                            "subreddit": sub_name,
-                            "upvotes": post.score
-                        })
-                        print(f"Found meme: {post.title} ({post.score} upvotes)")
+                is_image = post.url.endswith(('.jpg', '.jpeg', '.png'))
+                is_gif = post.url.endswith('.gif')
+                is_video = hasattr(post, 'is_video') and post.is_video
+
+                if post.score >= min_upvotes and not post.is_self and not post.stickied and (is_image or is_gif or is_video):
+                    url_to_use = post.url
+                    if is_video:
+                        url_to_use = post.media['reddit_video']['fallback_url']
+
+                    # --- Filtering Logic ---
+                    # Avoid duplicates from the log file and the current session
+                    if url_to_use in used_urls or url_to_use in session_urls:
+                        continue
+                    
+                    memes.append({
+                        "title": post.title,
+                        "url": url_to_use,
+                        "subreddit": sub_name,
+                        "upvotes": post.score
+                    })
+                    session_urls.add(url_to_use) # Add to session tracker
+                    print(f"Found meme: {post.title} ({post.score} upvotes)")
+            
+            if len(memes) >= limit:
+                break # Stop searching other subreddits if we have enough
 
     except Exception as e:
-        print(f"An error occurred: {e}")
-        # In a real app, this would be logged and shown to the user
-
+        print(f"An error occurred during Reddit search: {e}")
+        
     return memes
-
-if __name__ == '__main__':
-    # This is for testing the scraper directly
-    reddit = get_reddit_instance()
-    # A sample keyword
-    keyword_to_search = "memes"
-    found_memes = find_memes(reddit, keyword_to_search)
-
-    if found_memes:
-        print(f"\nFound {len(found_memes)} memes for '{keyword_to_search}':")
-        for meme in found_memes:
-            print(f"- {meme['title']} ({meme['url']})")
-    else:
-        print(f"No memes found for '{keyword_to_search}'. "
-              f"Try checking your Reddit API credentials or using a different keyword.")
