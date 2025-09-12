@@ -1,80 +1,85 @@
-import pytesseract
-import pyttsx3
 import os
+import pytesseract
 from PIL import Image
+from elevenlabs.client import ElevenLabs
+from playsound import playsound
+import tempfile
 
-def is_tesseract_installed():
-    """Checks if the Tesseract command is available."""
+def extract_text_from_image(tesseract_cmd, image_path):
+    """
+    Extracts text from an image file using Tesseract OCR.
+    """
+    if not all([tesseract_cmd, image_path]):
+        print("OCR Error: Missing Tesseract command path or image path.")
+        return ""
+        
     try:
-        pytesseract.get_tesseract_version()
-        print("Tesseract is installed and accessible.")
-        return True
-    except pytesseract.TesseractNotFoundError:
-        print("Tesseract Not Found: OCR functionality will not work.")
-        print("Please install Tesseract from https://github.com/tesseract-ocr/tesseract and ensure it's in your PATH.")
-        return False
-
-def extract_text_from_image(image_path):
-    """Extracts text from an image file using Tesseract OCR."""
-    try:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         text = pytesseract.image_to_string(Image.open(image_path))
         print(f"Extracted text: '{text.strip()}'")
-        return text.strip()
+        return text.strip().replace('\n', ' ')
+
+    except pytesseract.TesseractNotFoundError:
+        print(f"Tesseract Error: The Tesseract executable was not found at '{tesseract_cmd}'")
+        return ""
     except Exception as e:
-        print(f"An error occurred during OCR: {e}")
+        print(f"An unexpected error occurred during OCR processing: {e}")
         return ""
 
-def get_available_voices():
-    """
-    Gets a list of available TTS voices from pyttsx3.
-
-    Returns:
-        A dictionary mapping a display name (e.g., "Voice 0 - Male") to the voice ID.
-    """
+def get_elevenlabs_subscription_info(api_key):
+    if not api_key: return None
     try:
-        engine = pyttsx3.init()
-        voices = engine.getProperty('voices')
-        engine.stop() # Stop engine after getting properties
-        voice_dict = {}
-        for i, voice in enumerate(voices):
-            gender = "Female" if "female" in voice.gender.lower() else "Male"
-            name = f"Voice {i} ({voice.name}, {gender})"
-            voice_dict[name] = voice.id
-        return voice_dict
+        client = ElevenLabs(api_key=api_key)
+        return client.user.get_subscription()
     except Exception as e:
-        print(f"Could not get pyttsx3 voices. TTS might not work. Error: {e}")
-        return {"Default": "default"}
+        print(f"Error fetching ElevenLabs subscription info: {e}")
+        return None
 
-
-def generate_tts_audio(text, output_path, voice_id=None):
-    """
-    Generates an audio file from text using pyttsx3.
-
-    Args:
-        text (str): The text to convert to speech.
-        output_path (str): The path to save the output audio file (e.g., .mp3, .wav).
-        voice_id (str, optional): The ID of the voice to use. Defaults to None (pyttsx3 default).
-
-    Returns:
-        True if successful, False otherwise.
-    """
-    if not text:
-        print("No text provided for TTS.")
-        return False
-
+def get_elevenlabs_voices(api_key):
+    if not api_key: return {}
     try:
-        engine = pyttsx3.init()
-        if voice_id and voice_id != "default":
-            engine.setProperty('voice', voice_id)
+        client = ElevenLabs(api_key=api_key)
+        return {voice.name: voice.voice_id for voice in client.voices.get_all().voices}
+    except Exception as e:
+        print(f"Error fetching ElevenLabs voices: {e}")
+        return {}
 
-        engine.save_to_file(text, output_path)
-        engine.runAndWait() # Process the command queue
-        engine.stop()
+def generate_elevenlabs_tts(api_key, voice_id, text, output_path):
+    if not all([api_key, voice_id, text]):
+        return (False, "Missing API key, voice ID, or text.")
+    try:
+        client = ElevenLabs(api_key=api_key)
+        audio_stream = client.text_to_speech.convert(voice_id=voice_id, text=text)
+        with open(output_path, 'wb') as f:
+            for chunk in audio_stream:
+                f.write(chunk)
         print(f"TTS audio saved to {output_path}")
-        return True
+        return (True, None)
     except Exception as e:
-        print(f"An error occurred during pyttsx3 TTS generation: {e}")
-        return False
+        return (False, str(e))
 
-# This file is intended to be used as a module.
-# The test harness has been moved to tests/test_tts_processor.py
+def play_voice_preview(api_key, voice_id):
+    if not all([api_key, voice_id]): return
+    
+    # Use a temporary file to avoid conflicts
+    temp_fd, temp_path = tempfile.mkstemp(suffix=".mp3")
+    os.close(temp_fd) # Close the file descriptor
+
+    try:
+        client = ElevenLabs(api_key=api_key)
+        # A shorter, more pleasant preview text
+        preview_text = "The quick brown fox jumps over the lazy dog."
+        audio_stream = client.text_to_speech.convert(voice_id=voice_id, text=preview_text)
+        
+        with open(temp_path, "wb") as f:
+            for chunk in audio_stream:
+                f.write(chunk)
+        
+        playsound(temp_path)
+
+    except Exception as e:
+        print(f"An error occurred during voice preview: {e}")
+    finally:
+        # Ensure the temporary file is always deleted
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
