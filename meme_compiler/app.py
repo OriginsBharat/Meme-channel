@@ -131,7 +131,9 @@ class MemeCompilerApp(tk.Tk):
         self.search_entry = ttk.Entry(search_lf, width=50)
         self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
         self.search_button = ttk.Button(search_lf, text="Search", command=self.search_memes)
-        self.search_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.search_button.pack(side=tk.LEFT, padx=(5, 0), pady=5)
+        self.refresh_button = ttk.Button(search_lf, text="Refresh", command=self.search_memes)
+        self.refresh_button.pack(side=tk.LEFT, padx=(5, 5), pady=5)
         self.search_status = ttk.Label(search_lf, text="")
         self.search_status.pack(side=tk.LEFT, padx=5)
         list_lf = ttk.LabelFrame(controls_frame, text="2. Select Memes")
@@ -192,12 +194,22 @@ class MemeCompilerApp(tk.Tk):
 
     def _browse_file(self, file_type):
         path = filedialog.askopenfilename()
-        if not path: return
+        if not path:
+            return
+
         filename = os.path.basename(path)
-        if file_type == "intro": self.intro_full_path, self.intro_path_display.set(path), self.intro_path_display.set(filename)
-        elif file_type == "outro": self.outro_full_path, self.outro_path_display.set(path), self.outro_path_display.set(filename)
-        elif file_type == "background": self.background_full_path, self.background_path_display.set(path), self.background_path_display.set(filename)
-        elif file_type == "music": self.music_full_path, self.music_path_display.set(path), self.music_path_display.set(filename)
+
+        path_attributes = {
+            "intro": ("intro_full_path", self.intro_path_display),
+            "outro": ("outro_full_path", self.outro_path_display),
+            "background": ("background_full_path", self.background_path_display),
+            "music": ("music_full_path", self.music_path_display),
+        }
+
+        if file_type in path_attributes:
+            attr_name, display_var = path_attributes[file_type]
+            setattr(self, attr_name, path)
+            display_var.set(filename)
 
     def _browse_tesseract(self):
         path = filedialog.askopenfilename(title="Select tesseract.exe")
@@ -273,7 +285,8 @@ class MemeCompilerApp(tk.Tk):
         if self.video_player:
             self.video_player.stop()
             self.video_player = None
-        self.image_preview_label.pack_forget(), self.video_preview_label.pack_forget()
+        self.image_preview_label.pack_forget()
+        self.video_preview_label.pack_forget()
         is_video = url.endswith(('.mp4', '.gif'))
         if is_video:
             self.video_preview_label.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -328,15 +341,25 @@ class MemeCompilerApp(tk.Tk):
 
     def _compile_video_thread(self, args):
         result = create_video(**args)
-        self.after(0, self._on_compile_complete, result, args["output_path"])
+        self.after(0, self._on_compile_complete, result, args["output_path"], args["selected_memes"])
 
-    def _on_compile_complete(self, result, video_path):
+    def _on_compile_complete(self, result, video_path, selected_memes):
         self.compile_button.config(state=tk.NORMAL, text="Compile Video")
         self.status_label.config(text="")
         if result is None:
             messagebox.showerror("Error", "Video compilation failed. Check the console for details.")
             if os.path.exists(video_path): os.remove(video_path)
             return
+
+        # Log used memes
+        try:
+            with open(self.used_memes_file, 'a') as f:
+                for meme in selected_memes:
+                    f.write(f"{meme['url']}\n")
+            print(f"Logged {len(selected_memes)} used memes to {self.used_memes_file}")
+        except Exception as e:
+            print(f"Error writing to used memes log: {e}")
+
         self.open_final_preview_window(video_path, result)
 
     def open_final_preview_window(self, video_path, tts_failures):

@@ -48,19 +48,21 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
         return None
 
     TARGET_SIZE = (1080, 1920) if vertical_format else None
-    intro_clip = VideoFileClip(intro_path)
-    outro_clip = VideoFileClip(outro_path)
-    background_clip = VideoFileClip(background_path)
-
-    if vertical_format:
-        intro_clip = _resize_and_crop_to_fill(intro_clip, TARGET_SIZE)
-        outro_clip = _resize_and_crop_to_fill(outro_clip, TARGET_SIZE)
-        background_clip = _resize_and_crop_to_fill(background_clip, TARGET_SIZE)
-
-    meme_clip_duration = 40 / len(downloaded_memes)
+    intro_clip, outro_clip, background_clip, final_video, music_clip = None, None, None, None, None
     meme_clips = []
-    
+
     try:
+        intro_clip = VideoFileClip(intro_path)
+        outro_clip = VideoFileClip(outro_path)
+        background_clip = VideoFileClip(background_path)
+
+        if vertical_format:
+            intro_clip = _resize_and_crop_to_fill(intro_clip, TARGET_SIZE)
+            outro_clip = _resize_and_crop_to_fill(outro_clip, TARGET_SIZE)
+            background_clip = _resize_and_crop_to_fill(background_clip, TARGET_SIZE)
+
+        meme_clip_duration = 40 / len(downloaded_memes)
+
         for i, meme_data in enumerate(downloaded_memes):
             path = meme_data['path']
             title = meme_data['title']
@@ -140,9 +142,17 @@ def create_video(selected_memes, intro_path, outro_path, background_path, output
         print(f"An error occurred during video creation: {e}")
         return None
     finally:
-        intro_clip.close(); outro_clip.close(); background_clip.close()
-        if 'final_video' in locals(): final_video.close()
+        # Close all opened clips to free up resources
+        if intro_clip: intro_clip.close()
+        if outro_clip: outro_clip.close()
+        if background_clip: background_clip.close()
+        if final_video: final_video.close()
+        if music_clip: music_clip.close()
         for clip in meme_clips:
-            if hasattr(clip, 'audio') and clip.audio: clip.audio.close()
-            clip.close()
-        if os.path.exists(temp_folder): shutil.rmtree(temp_folder)
+            if clip and hasattr(clip, 'audio') and clip.audio:
+                clip.audio.close()
+            if clip:
+                clip.close()
+        # Clean up the temporary folder
+        if os.path.exists(temp_folder):
+            shutil.rmtree(temp_folder)

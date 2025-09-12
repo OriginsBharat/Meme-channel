@@ -11,15 +11,6 @@ def get_reddit_instance(client_id, client_secret):
         return None
     return praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=USER_AGENT)
 
-def _get_image_size(url):
-    try:
-        response = requests.head(url, timeout=5)
-        response.raise_for_status()
-        size = int(response.headers.get('Content-Length', 0))
-        return size
-    except Exception as e:
-        print(f"Could not get size for {url}: {e}")
-        return -1
 
 def find_memes(reddit, keyword, used_memes_log, limit=25, min_upvotes=500):
     memes = []
@@ -62,6 +53,7 @@ def find_memes(reddit, keyword, used_memes_log, limit=25, min_upvotes=500):
                     # Avoid duplicates from the log file and the current session
                     if url_to_use in used_urls or url_to_use in session_urls:
                         continue
+
                     
                     memes.append({
                         "title": post.title,

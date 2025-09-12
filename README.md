@@ -54,7 +54,8 @@ This application requires the Tesseract OCR engine to be installed on your syste
     *   Paste your **Reddit Client ID** and **Client Secret**.
     *   Paste your **ElevenLabs API Key**.
     *   Paste the full path to your **`tesseract.exe`** file from Step 1.
-    *   Click **"Save All Settings & Refresh Voices"**. The app will save your settings locally in a `config.json` file.
+    *   For the **YouTube Uploader**, you will need to provide a `client_secrets.json` file. Follow Google's official documentation to create a project, enable the YouTube Data API v3, and download the OAuth 2.0 credentials for a Desktop Application. In the Settings tab, use the "Browse..." button to select this file.
+    *   Click **"Save Settings"** at the bottom of the tab. The app will save your settings locally in a `config.json` file.
 
 ## Usage
 

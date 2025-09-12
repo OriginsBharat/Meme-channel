@@ -17,40 +17,31 @@ from meme_compiler.tts_processor import (
 
 class TestOcrProcessor(unittest.TestCase):
 
-    @patch('meme_compiler.tts_processor.requests.post')
-    def test_extract_text_from_image_success(self, mock_post):
+    @patch('meme_compiler.tts_processor.pytesseract.image_to_string')
+    @patch('meme_compiler.tts_processor.Image.open')
+    def test_extract_text_from_image_success(self, mock_image_open, mock_image_to_string):
         # --- Mock Configuration ---
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "ParsedResults": [{"ParsedText": "This is a test\r\n"}],
-            "IsErroredOnProcessing": False
-        }
-        mock_post.return_value = mock_response
-
-        dummy_path = "dummy_image.png"
-        with open(dummy_path, "w") as f: f.write("dummy")
+        mock_image_to_string.return_value = "This is a test"
 
         # --- Function Call ---
-        text = extract_text_from_image("dummy_ocr_key", dummy_path)
+        text = extract_text_from_image("dummy_tesseract_path", "dummy_image.png")
 
         # --- Assertions ---
         self.assertEqual(text, "This is a test")
-        mock_post.assert_called_once()
-        os.remove(dummy_path)
+        mock_image_open.assert_called_once_with("dummy_image.png")
+        mock_image_to_string.assert_called_once()
 
-    @patch('meme_compiler.tts_processor.requests.post')
-    def test_extract_text_from_image_api_error(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "IsErroredOnProcessing": True,
-            "ErrorMessage": ["Test API Error"]
-        }
-        mock_post.return_value = mock_response
-        dummy_path = "dummy_image.png"
-        with open(dummy_path, "w") as f: f.write("dummy")
-        text = extract_text_from_image("dummy_ocr_key", dummy_path)
+    @patch('meme_compiler.tts_processor.pytesseract.image_to_string')
+    @patch('meme_compiler.tts_processor.Image.open')
+    def test_extract_text_from_image_tesseract_error(self, mock_image_open, mock_image_to_string):
+        # --- Mock Configuration ---
+        mock_image_to_string.side_effect = Exception("Tesseract Engine Error")
+
+        # --- Function Call ---
+        text = extract_text_from_image("dummy_tesseract_path", "dummy_image.png")
+
+        # --- Assertions ---
         self.assertEqual(text, "")
-        os.remove(dummy_path)
 
 
 class TestElevenLabsProcessor(unittest.TestCase):

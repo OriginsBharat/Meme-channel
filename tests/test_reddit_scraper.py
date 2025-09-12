@@ -57,13 +57,13 @@ class TestRedditScraper(unittest.TestCase):
         memes = find_memes(mock_reddit_instance, "test", self.used_memes_log)
 
         # --- Assertions ---
-        self.assertEqual(len(memes), 2) # Should find the good image and the video
+        self.assertEqual(len(memes), 3) # Should find the good image, the large image, and the video
         
         found_titles = [m['title'] for m in memes]
         self.assertIn("Good Meme", found_titles)
         self.assertIn("Video Meme", found_titles)
+        self.assertIn("Large Meme", found_titles)
         
-        self.assertNotIn("Large Meme", found_titles) # Should be filtered by size
         self.assertNotIn("Used Meme", found_titles) # Should be filtered by log file
 
 if __name__ == '__main__':
