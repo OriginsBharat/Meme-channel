@@ -1,27 +1,27 @@
 import pytesseract
 import pyttsx3
 import os
+import logging
 from PIL import Image
 
 def is_tesseract_installed():
     """Checks if the Tesseract command is available."""
     try:
         pytesseract.get_tesseract_version()
-        print("Tesseract is installed and accessible.")
+        logging.info("Tesseract is installed and accessible.")
         return True
     except pytesseract.TesseractNotFoundError:
-        print("Tesseract Not Found: OCR functionality will not work.")
-        print("Please install Tesseract from https://github.com/tesseract-ocr/tesseract and ensure it's in your PATH.")
+        logging.warning("Tesseract Not Found: OCR functionality will not work.")
         return False
 
 def extract_text_from_image(image_path):
     """Extracts text from an image file using Tesseract OCR."""
     try:
         text = pytesseract.image_to_string(Image.open(image_path))
-        print(f"Extracted text: '{text.strip()}'")
+        logging.info(f"Extracted text: '{text.strip()}' from {image_path}")
         return text.strip()
-    except Exception as e:
-        print(f"An error occurred during OCR: {e}")
+    except (pytesseract.TesseractError, FileNotFoundError) as e:
+        logging.error(f"An error occurred during OCR on {image_path}", exc_info=True)
         return ""
 
 def get_available_voices():
@@ -40,10 +40,11 @@ def get_available_voices():
             gender = "Female" if "female" in voice.gender.lower() else "Male"
             name = f"Voice {i} ({voice.name}, {gender})"
             voice_dict[name] = voice.id
+        logging.info(f"Discovered {len(voice_dict)} TTS voices.")
         return voice_dict
-    except Exception as e:
-        print(f"Could not get pyttsx3 voices. TTS might not work. Error: {e}")
-        return {"Default": "default"}
+    except RuntimeError as e:
+        logging.error("Could not get pyttsx3 voices. TTS engine likely failed to initialize.", exc_info=True)
+        return {}
 
 
 def generate_tts_audio(text, output_path, voice_id=None):
@@ -59,7 +60,7 @@ def generate_tts_audio(text, output_path, voice_id=None):
         True if successful, False otherwise.
     """
     if not text:
-        print("No text provided for TTS.")
+        logging.warning("No text provided for TTS generation.")
         return False
 
     try:
@@ -70,10 +71,10 @@ def generate_tts_audio(text, output_path, voice_id=None):
         engine.save_to_file(text, output_path)
         engine.runAndWait() # Process the command queue
         engine.stop()
-        print(f"TTS audio saved to {output_path}")
+        logging.info(f"TTS audio saved to {output_path}")
         return True
-    except Exception as e:
-        print(f"An error occurred during pyttsx3 TTS generation: {e}")
+    except RuntimeError as e:
+        logging.error(f"An error occurred during pyttsx3 TTS generation for {output_path}", exc_info=True)
         return False
 
 # This file is intended to be used as a module.

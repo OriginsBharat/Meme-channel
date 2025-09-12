@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import threading
 import os
 import configparser
+import praw
 from reddit_scraper import find_memes, get_reddit_instance
 from video_compiler import create_video
 from tts_processor import get_available_voices
@@ -100,11 +101,29 @@ class MemeCompilerApp(tk.Tk):
 
         # --- Step 3: Add Videos ---
         self.video_group = ttk.LabelFrame(parent, text="Step 3: Add Your Video Files", padding="10")
+
         file_select_frame = ttk.Frame(self.video_group, style="TLabelframe")
         file_select_frame.pack(fill=tk.X)
-        ttk.Button(file_select_frame, text="Select Intro", command=lambda: self.select_file(self.intro_path, "Intro")).pack(side=tk.LEFT, expand=True, padx=5)
-        ttk.Button(file_select_frame, text="Select Background", command=lambda: self.select_file(self.background_path, "Background")).pack(side=tk.LEFT, expand=True, padx=5)
-        ttk.Button(file_select_frame, text="Select Outro", command=lambda: self.select_file(self.outro_path, "Outro")).pack(side=tk.LEFT, expand=True, padx=5)
+        file_select_frame.columnconfigure((0, 1, 2), weight=1) # Make columns expand equally
+
+        # --- Intro ---
+        intro_frame = ttk.Frame(file_select_frame, style="TLabelframe")
+        intro_frame.grid(row=0, column=0, padx=5, sticky='ew')
+        ttk.Button(intro_frame, text="Select Intro", command=lambda: self.select_file(self.intro_path, "Intro")).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        ttk.Button(intro_frame, text="X", command=lambda: self.clear_file_selection(self.intro_path), width=2).pack(side=tk.LEFT)
+
+        # --- Background ---
+        bg_frame = ttk.Frame(file_select_frame, style="TLabelframe")
+        bg_frame.grid(row=0, column=1, padx=5, sticky='ew')
+        ttk.Button(bg_frame, text="Select Background", command=lambda: self.select_file(self.background_path, "Background")).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        ttk.Button(bg_frame, text="X", command=lambda: self.clear_file_selection(self.background_path), width=2).pack(side=tk.LEFT)
+
+        # --- Outro ---
+        outro_frame = ttk.Frame(file_select_frame, style="TLabelframe")
+        outro_frame.grid(row=0, column=2, padx=5, sticky='ew')
+        ttk.Button(outro_frame, text="Select Outro", command=lambda: self.select_file(self.outro_path, "Outro")).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        ttk.Button(outro_frame, text="X", command=lambda: self.clear_file_selection(self.outro_path), width=2).pack(side=tk.LEFT)
+
         labels_frame = ttk.Frame(self.video_group, style="TLabelframe")
         labels_frame.pack(fill=tk.X, pady=(5,0))
         ttk.Label(labels_frame, textvariable=self.intro_path, wraplength=280, style="TLabelframe.Label").pack(side=tk.LEFT, expand=True, padx=5)
@@ -117,13 +136,34 @@ class MemeCompilerApp(tk.Tk):
         tts_options_frame.pack(fill=tk.X, pady=5)
         tts_check = ttk.Checkbutton(tts_options_frame, text="Add TTS Voiceover", variable=self.tts_enabled_var, style="TCheckbutton")
         tts_check.pack(side=tk.LEFT, anchor='w')
-        ttk.Label(tts_options_frame, text="Select Voice:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(20, 5))
+
+        voice_label = ttk.Label(tts_options_frame, text="Select Voice:", style="TLabelframe.Label")
+        voice_label.pack(side=tk.LEFT, padx=(20, 5))
+
         voice_menu = ttk.Combobox(tts_options_frame, textvariable=self.selected_voice_name, state='readonly', width=30)
-        voice_menu['values'] = list(self.voices_map.keys())
-        if voice_menu['values']: self.selected_voice_name.set(voice_menu['values'][0])
         voice_menu.pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        if self.voices_map:
+            voice_menu['values'] = list(self.voices_map.keys())
+            self.selected_voice_name.set(voice_menu['values'][0])
+        else:
+            self.tts_enabled_var.set(False)
+            tts_check.config(state=tk.DISABLED)
+            voice_menu.config(state=tk.DISABLED)
+            self.selected_voice_name.set("No voices found")
         self.compile_button = ttk.Button(self.compile_group, text="Compile Video!", command=self.start_compilation)
         self.compile_button.pack(fill=tk.X, pady=5, ipady=10)
+
+        # --- Progress Bar (Initially Hidden) ---
+        self.progress_var = tk.DoubleVar()
+        self.progress_label_var = tk.StringVar()
+        self.progress_label = ttk.Label(self.compile_group, textvariable=self.progress_label_var, style="TLabelframe.Label")
+        self.progress_bar = ttk.Progressbar(self.compile_group, variable=self.progress_var, maximum=100)
+
+    def clear_file_selection(self, var_to_clear):
+        var_to_clear.set("")
+        self.status_var.set("File selection cleared.")
+        self.check_compilation_readiness()
 
     def select_file(self, var, file_type):
         filepath = filedialog.askopenfilename(title=f"Select {file_type} File", filetypes=[("Video/GIF Files", "*.mp4 *.mov *.avi *.gif"), ("All files", "*.*")])
@@ -150,8 +190,9 @@ class MemeCompilerApp(tk.Tk):
             reddit = get_reddit_instance(client_id, client_secret, user_agent)
             self.found_memes = find_memes(reddit, self.keyword_var.get())
             self.after(0, self.update_results_list)
-        except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Search Error", f"An error occurred: {e}"))
+        except (ValueError, praw.exceptions.PRAWException) as e:
+            logging.error("Failed to search for memes.", exc_info=True)
+            self.after(0, lambda: messagebox.showerror("Search Error", f"Could not complete search.\n\nReason: {e}"))
             self.status_var.set("Error during search.")
         finally:
             self.after(0, lambda: self.search_button.config(state=tk.NORMAL))
@@ -191,6 +232,11 @@ class MemeCompilerApp(tk.Tk):
         self.status_var.set("Starting video compilation... This may take a while.")
         self.compile_button.config(state=tk.DISABLED)
 
+        # Show and initialize the progress bar
+        self.progress_label.pack(fill=tk.X, padx=5, pady=(5,0))
+        self.progress_bar.pack(fill=tk.X, padx=5, pady=(0,5))
+        self.update_progress(0, "Preparing to compile...")
+
         tts_enabled = self.tts_enabled_var.get()
         voice_name = self.selected_voice_name.get()
         voice_id = self.voices_map.get(voice_name)
@@ -204,14 +250,27 @@ class MemeCompilerApp(tk.Tk):
 
     def compilation_worker(self, memes, intro, outro, bg, output, tts_enabled, voice_id):
         try:
-            create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, voice_id=voice_id)
-            self.after(0, lambda: messagebox.showinfo("Success!", f"Video compiled and saved to:\n{output}"))
-            self.status_var.set("Compilation finished! Ready for a new task.")
+            create_video(memes, intro, outro, bg, output, enable_tts=tts_enabled, voice_id=voice_id, progress_callback=self.update_progress)
+            # The final progress update handles the success message
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Compilation Error", f"An error occurred: {e}"))
+            logging.error("Video compilation failed.", exc_info=True)
+            self.after(0, lambda: messagebox.showerror("Compilation Error", f"An unexpected error occurred during video compilation.\n\n{e}\n\nCheck meme_compiler.log for details."))
             self.status_var.set("Error during compilation.")
         finally:
+            # Hide progress bar and re-enable compile button
+            self.after(0, lambda: self.progress_label.pack_forget())
+            self.after(0, lambda: self.progress_bar.pack_forget())
             self.after(0, lambda: self.compile_button.config(state=tk.NORMAL))
+
+    def update_progress(self, percent, message):
+        def _update():
+            self.progress_var.set(percent)
+            self.progress_label_var.set(message)
+            if percent == 100:
+                self.status_var.set("Compilation finished! Ready for a new task.")
+                messagebox.showinfo("Success!", "Video compilation successful!")
+
+        self.after(0, _update)
 
     def _create_settings_tab(self, parent):
         # --- Reddit API Settings ---
@@ -229,9 +288,44 @@ class MemeCompilerApp(tk.Tk):
 
         api_group.columnconfigure(1, weight=1)
 
-        # --- Save Button ---
-        save_button = ttk.Button(parent, text="Save Settings", command=self.save_config)
-        save_button.pack(pady=15, ipady=5, fill=tk.X)
+        # --- Action Buttons ---
+        button_frame = ttk.Frame(parent, style="TLabelframe")
+        button_frame.pack(pady=15, fill=tk.X, ipady=5)
+
+        self.test_button = ttk.Button(button_frame, text="Test Credentials", command=self.start_test_credentials)
+        self.test_button.pack(side=tk.RIGHT, padx=(10, 0))
+
+        save_button = ttk.Button(button_frame, text="Save Settings", command=self.save_config)
+        save_button.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+
+    def start_test_credentials(self):
+        self.test_button.config(state=tk.DISABLED)
+        self.status_var.set("Testing Reddit API credentials...")
+        test_thread = threading.Thread(target=self.test_credentials_worker, daemon=True)
+        test_thread.start()
+
+    def test_credentials_worker(self):
+        try:
+            client_id = self.client_id_var.get()
+            client_secret = self.client_secret_var.get()
+            user_agent = self.user_agent_var.get()
+
+            reddit = get_reddit_instance(client_id, client_secret, user_agent)
+            redditor = reddit.user.me() # Authenticated call
+
+            success_message = f"Successfully authenticated as u/{redditor.name}."
+            self.after(0, lambda: messagebox.showinfo("Success", success_message))
+            self.after(0, lambda: self.status_var.set("Credentials are valid."))
+
+        except (ValueError, praw.exceptions.PRAWException) as e:
+            logging.error("Credential test failed.", exc_info=True)
+            error_message = f"Credential test failed.\n\nError: {e}"
+            self.after(0, lambda: messagebox.showerror("Error", error_message))
+            self.after(0, lambda: self.status_var.set("Credential test failed."))
+
+        finally:
+            self.after(0, lambda: self.test_button.config(state=tk.NORMAL))
 
     def load_config(self):
         config = configparser.ConfigParser()
@@ -259,10 +353,20 @@ class MemeCompilerApp(tk.Tk):
         messagebox.showinfo("Settings Saved", "Your Reddit API settings have been saved to config.ini.")
 
 
+import logging
 from .dependency_handler import check_dependencies
 
 if __name__ == "__main__":
-    # 1. Check for external dependencies before starting the app
+    # 1. Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(module)s - %(message)s',
+        filename='meme_compiler.log',
+        filemode='w' # Overwrite log file on each run
+    )
+    logging.info("Application starting...")
+
+    # 2. Check for external dependencies before starting the app
     missing_deps_error = check_dependencies()
     if missing_deps_error:
         # Need a dummy root to show the messagebox without the main window

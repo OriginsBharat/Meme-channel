@@ -1,5 +1,6 @@
 import praw
 import os
+import logging
 
 
 def get_reddit_instance(client_id, client_secret, user_agent):
@@ -17,6 +18,7 @@ def get_reddit_instance(client_id, client_secret, user_agent):
     if not all([client_id, client_secret, user_agent]):
         raise ValueError("Reddit API credentials are not fully provided.")
 
+    logging.info("Initializing PRAW Reddit instance.")
     return praw.Reddit(
         client_id=client_id,
         client_secret=client_secret,
@@ -37,15 +39,16 @@ def find_memes(reddit, keyword, limit=25, min_upvotes=500):
         A list of dictionaries, where each dictionary contains post title and url.
     """
     memes = []
+    logging.info(f"Starting meme search for keyword: '{keyword}' with limit={limit}, min_upvotes={min_upvotes}")
 
     # Search for subreddits related to the keyword
     try:
         subreddits = [subreddit.display_name for subreddit in reddit.subreddits.search(keyword, limit=5)]
         if not subreddits:
-            print(f"No subreddits found for keyword: {keyword}")
+            logging.warning(f"No subreddits found for keyword: {keyword}")
             return []
 
-        print(f"Found subreddits: {', '.join(subreddits)}")
+        logging.info(f"Found subreddits: {', '.join(subreddits)}")
 
         for sub_name in subreddits:
             subreddit = reddit.subreddit(sub_name)
@@ -62,12 +65,12 @@ def find_memes(reddit, keyword, limit=25, min_upvotes=500):
                             "subreddit": sub_name,
                             "upvotes": post.score
                         })
-                        print(f"Found meme: {post.title} ({post.score} upvotes)")
+                        logging.info(f"Found meme: '{post.title}' ({post.score} upvotes) in r/{sub_name}")
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        # In a real app, this would be logged and shown to the user
+    except praw.exceptions.PRAWException as e:
+        logging.error(f"A PRAW-related error occurred during Reddit search for keyword '{keyword}'", exc_info=True)
 
+    logging.info(f"Found a total of {len(memes)} memes.")
     return memes
 
 if __name__ == '__main__':

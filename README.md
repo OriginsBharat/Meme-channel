@@ -5,7 +5,7 @@ A desktop application to automatically find memes on Reddit and compile them int
 ## Features
 
 - **Keyword Search**: Finds memes on Reddit based on a keyword (e.g., "dankmemes").
-- **Upvote Filtering**: Gathers posts with 500+ upvotes.
+- **Configurable Settings**: Save your Reddit API credentials directly in the app.
 - **Meme Selection**: Displays the found memes for you to select your favorites.
 - **Custom Videos**: Allows you to use your own intro, outro, and background gameplay videos.
 - **Offline TTS**: Generates a voiceover for image-based memes using a selection of offline voices.
@@ -14,16 +14,17 @@ A desktop application to automatically find memes on Reddit and compile them int
 
 ## Installation
 
-There are two ways to use this application: by running the pre-built executable (easiest) or by running the source code directly (for developers).
+There are two ways to use this application: by running a pre-built executable (easiest) or by running the source code directly (for developers).
 
 ### Method 1: Running the Executable (Recommended)
 
 1.  Navigate to the **"Releases"** page on this GitHub repository.
 2.  Download the `MemeCompiler` executable for your operating system (e.g., `MemeCompiler.exe` for Windows).
-3.  **Install Dependencies**: Before running the app, you may need to install two system-level dependencies if you don't already have them:
-    *   **Tesseract OCR**: Required for reading text from images. [Installation Guide](https://github.com/tesseract-ocr/tesseract)
-    *   **eSpeak / eSpeak-NG** (for Linux users): Required for the TTS engine. You can usually install it with `sudo apt-get install espeak`.
-4.  Run the `MemeCompiler` executable.
+3.  **Install System Dependencies**: Before running the app, you need to install the following if you don't already have them:
+    *   **FFmpeg**: Required for video processing. [Download FFmpeg](https://ffmpeg.org/download.html) and ensure it's accessible in your system's PATH.
+    *   **Tesseract OCR**: Required for reading text from images. [Tesseract Installation Guide](https://github.com/tesseract-ocr/tesseract).
+    *   **eSpeak / eSpeak-NG** (Linux users only): Required for the TTS engine. You can usually install it with `sudo apt-get install espeak`.
+4.  Run the `MemeCompiler` executable and follow the Usage Guide below.
 
 ### Method 2: Running from Source (For Developers)
 
@@ -34,54 +35,44 @@ There are two ways to use this application: by running the pre-built executable 
     ```
 2.  **Create a virtual environment** (recommended):
     ```bash
-    python3 -m venv venv
+    python -m venv venv
     source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 3.  **Install Python dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
-4.  **Install system dependencies** as described in Method 1 (Tesseract and/or eSpeak).
-5.  **Set Environment Variables** for the Reddit API (see Usage section below).
-6.  **Run the application**:
+4.  **Install system dependencies** as described in Method 1 (FFmpeg, Tesseract, and eSpeak if on Linux).
+5.  **Run the application**:
     ```bash
-    python3 meme_compiler/app.py
+    python -m meme_compiler.app
     ```
 
 ## Usage Guide
 
-### Step 0: Reddit API Credentials
+### Step 0: Configure Settings
 
-Before you start, you need to get API credentials from Reddit.
-1.  Go to [Reddit's app preferences](https://www.reddit.com/prefs/apps).
-2.  Scroll to the bottom and click **"are you a developer? create an app..."**.
-3.  Fill out the form:
-    *   **name**: MemeCompiler
-    *   **type**: select `script`
-    *   **redirect uri**: `http://localhost:8080`
-4.  Click **"create app"**. You will see your client ID and client secret.
-5.  You must make these credentials available to the application by setting them as **environment variables**:
-    *   **On Linux/macOS**:
-        ```bash
-        export REDDIT_CLIENT_ID="YOUR_CLIENT_ID_HERE"
-        export REDDIT_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
-        ```
-    *   **On Windows**:
-        ```powershell
-        $env:REDDIT_CLIENT_ID="YOUR_CLIENT_ID_HERE"
-        $env:REDDIT_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
-        ```
+1.  **Get Reddit API Credentials**:
+    *   Go to [Reddit's app preferences](https://www.reddit.com/prefs/apps).
+    *   Scroll to the bottom and click **"are you a developer? create an app..."**.
+    *   Fill out the form: `name` (e.g., MemeCompiler), `type` (`script`), `redirect uri` (`http://localhost:8080`).
+    *   Click **"create app"**. You will see your client ID and client secret.
+2.  **Save Credentials in the App**:
+    *   Launch the Meme Compiler application.
+    *   Go to the **"Settings"** tab.
+    *   Enter your Reddit **Client ID**, **Client Secret**, and a descriptive **User Agent** (e.g., `MemeCompiler/1.0 by YourUsername`).
+    *   Click **"Save Settings"**. Your credentials will be saved to a `config.ini` file in the same directory as the app.
 
 ### Step 1: Find Memes
 
--   Launch the application.
+-   Go to the **"Compiler"** tab.
 -   Enter a keyword for the type of memes you want (e.g., `historymemes`, `wholesomememes`).
 -   Click **"Search..."**. The app will search Reddit for matching posts.
 
 ### Step 2: Select Memes
 
 -   Once the search is complete, a list of found memes will appear.
--   Click on the memes you want to include in your video. You can select multiple by holding `Ctrl` (or `Cmd` on Mac) and clicking.
+-   Select the memes you want to include in your video. You can select multiple by holding `Ctrl` (or `Cmd` on Mac) and clicking.
 
 ### Step 3: Add Your Video Files
 
@@ -96,14 +87,14 @@ Before you start, you need to get API credentials from Reddit.
     *   Select a voice from the dropdown menu.
 -   Click the **"Compile Video!"** button.
 -   A dialog box will ask you where you want to save the final video file.
--   The compilation will start. This may take several minutes depending on the number of memes. The app will notify you when it's complete.
+-   The compilation will start. This may take several minutes. The app will notify you when it's complete.
 
 ## Building From Source
 
-If you want to build the executable yourself, you can use the included `PyInstaller` configuration.
-1.  Follow the "Running from Source" instructions to set up the environment.
-2.  Run the build command:
-    ```bash
-    pyinstaller --name MemeCompiler --onefile --noconfirm --clean --hidden-import="tkinter.filedialog" --hidden-import="PIL.Image" --hidden-import="pyttsx3.drivers" --hidden-import="pyttsx3.drivers.espeak" meme_compiler/app.py
-    ```
-3.  The final executable will be located in the `dist/` directory.
+If you want to build the executable yourself, first follow the "Running from Source" instructions to set up your environment. Then, run the following command in your terminal:
+
+```bash
+pyinstaller --name MemeCompiler --onefile --noconfirm --windowed --clean --hidden-import="tkinter.filedialog" --hidden-import="PIL.Image" --hidden-import="pyttsx3.drivers" --hidden-import="pyttsx3.drivers.espeak" --hidden-import="configparser" meme_compiler/app.py
+```
+
+The final executable will be located in the `dist/` directory. The `--windowed` flag prevents a console window from appearing when you run the final application.
