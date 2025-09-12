@@ -2,11 +2,37 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
 import os
+import shutil
 import configparser
 import praw
+from PIL import Image, ImageTk
 from reddit_scraper import find_memes, get_reddit_instance
 from video_compiler import create_video
 from tts_processor import get_available_voices
+
+# --- Reusable Components ---
+
+class ScrollableFrame(ttk.Frame):
+    """A scrollable frame that can hold widgets."""
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+        canvas = tk.Canvas(self, bg=BG_COLOR, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        self.scrollable_frame = ttk.Frame(canvas, style="TFrame")
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        # Bind mouse wheel scrolling
+        self.scrollable_frame.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
 # --- Theme and Styling ---
 BG_COLOR = "#2a004f" # Dark Purple
@@ -24,6 +50,7 @@ class MemeCompilerApp(tk.Tk):
 
         # --- Class Attributes ---
         self.found_memes = []
+        self.thumbnail_dir = None
         self.intro_path = tk.StringVar()
         self.outro_path = tk.StringVar()
         self.background_path = tk.StringVar()
@@ -42,8 +69,11 @@ class MemeCompilerApp(tk.Tk):
         self.style.configure("TFrame", background=BG_COLOR)
         self.style.configure("TLabel", background=BG_COLOR, foreground=TEXT_COLOR)
         self.style.configure("Header.TLabel", font=(FONT_NAME, 24, "bold"), foreground=PRIMARY_COLOR)
-        self.style.configure("TButton", background=PRIMARY_COLOR, foreground=BG_COLOR, font=(FONT_NAME, 12, "bold"), borderwidth=0)
-        self.style.map("TButton", background=[('active', SECONDARY_COLOR)])
+        self.style.configure("TButton", background=PRIMARY_COLOR, foreground=BG_COLOR, font=(FONT_NAME, 12, "bold"), borderwidth=0, padding=10)
+        self.style.map("TButton",
+            background=[('active', SECONDARY_COLOR), ('hover', '#ff4dff')],
+            foreground=[('active', TEXT_COLOR)]
+        )
         self.style.configure("TEntry", fieldbackground="#4a2a6f", foreground=TEXT_COLOR, insertcolor=PRIMARY_COLOR)
         self.style.configure("TLabelframe", background=BG_SECONDARY, bordercolor=PRIMARY_COLOR, relief=tk.RIDGE)
         self.style.configure("TLabelframe.Label", background=BG_SECONDARY, foreground=PRIMARY_COLOR, font=(FONT_NAME, 12, "bold"))
@@ -54,6 +84,13 @@ class MemeCompilerApp(tk.Tk):
         self.configure(bg=BG_COLOR)
         self.create_widgets()
         self.load_config()
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self):
+        # Clean up the thumbnail directory before closing
+        if self.thumbnail_dir and os.path.exists(self.thumbnail_dir):
+            shutil.rmtree(self.thumbnail_dir)
+        self.destroy()
 
     def create_widgets(self):
         # --- Main Layout ---
@@ -80,11 +117,11 @@ class MemeCompilerApp(tk.Tk):
     def _create_compiler_tab(self, parent):
         # --- Step 1: Search ---
         search_group = ttk.LabelFrame(parent, text="Step 1: Find Memes", padding="10")
-        search_group.pack(fill=tk.X, pady=5)
+        search_group.pack(fill=tk.X, pady=5, padx=5)
 
         keyword_frame = ttk.Frame(search_group, style="TLabelframe")
-        keyword_frame.pack(fill=tk.X)
-        ttk.Label(keyword_frame, text="Keyword:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 5))
+        keyword_frame.pack(fill=tk.X, expand=True, pady=5)
+        ttk.Label(keyword_frame, text="Keyword:", style="TLabelframe.Label").pack(side=tk.LEFT, padx=(0, 10))
         self.keyword_var = tk.StringVar(value="dankmemes")
         ttk.Entry(keyword_frame, textvariable=self.keyword_var, width=40).pack(side=tk.LEFT, expand=True, fill=tk.X)
         self.search_button = ttk.Button(keyword_frame, text="Search...", command=self.start_search)
@@ -92,23 +129,19 @@ class MemeCompilerApp(tk.Tk):
 
         # --- Step 2: Select Memes (Initially Hidden) ---
         self.results_group = ttk.LabelFrame(parent, text="Step 2: Select Your Memes", padding="10")
-        self.results_listbox = tk.Listbox(self.results_group, bg="#333", fg=TEXT_COLOR, selectbackground=SECONDARY_COLOR, height=10, selectmode=tk.MULTIPLE, relief=tk.FLAT)
-        self.results_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-        scrollbar = ttk.Scrollbar(self.results_group, orient=tk.VERTICAL, command=self.results_listbox.yview)
-        self.results_listbox.config(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.results_listbox.bind('<<ListboxSelect>>', self.check_compilation_readiness)
+        self.results_frame = ScrollableFrame(self.results_group)
+        self.results_frame.pack(fill="both", expand=True)
 
         # --- Step 3: Add Videos ---
         self.video_group = ttk.LabelFrame(parent, text="Step 3: Add Your Video Files", padding="10")
 
         file_select_frame = ttk.Frame(self.video_group, style="TLabelframe")
-        file_select_frame.pack(fill=tk.X)
+        file_select_frame.pack(fill=tk.X, pady=5)
         file_select_frame.columnconfigure((0, 1, 2), weight=1) # Make columns expand equally
 
         # --- Intro ---
         intro_frame = ttk.Frame(file_select_frame, style="TLabelframe")
-        intro_frame.grid(row=0, column=0, padx=5, sticky='ew')
+        intro_frame.grid(row=0, column=0, padx=(0, 5), sticky='ew')
         ttk.Button(intro_frame, text="Select Intro", command=lambda: self.select_file(self.intro_path, "Intro")).pack(side=tk.LEFT, expand=True, fill=tk.X)
         ttk.Button(intro_frame, text="X", command=lambda: self.clear_file_selection(self.intro_path), width=2).pack(side=tk.LEFT)
 
@@ -120,12 +153,12 @@ class MemeCompilerApp(tk.Tk):
 
         # --- Outro ---
         outro_frame = ttk.Frame(file_select_frame, style="TLabelframe")
-        outro_frame.grid(row=0, column=2, padx=5, sticky='ew')
+        outro_frame.grid(row=0, column=2, padx=(5, 0), sticky='ew')
         ttk.Button(outro_frame, text="Select Outro", command=lambda: self.select_file(self.outro_path, "Outro")).pack(side=tk.LEFT, expand=True, fill=tk.X)
         ttk.Button(outro_frame, text="X", command=lambda: self.clear_file_selection(self.outro_path), width=2).pack(side=tk.LEFT)
 
         labels_frame = ttk.Frame(self.video_group, style="TLabelframe")
-        labels_frame.pack(fill=tk.X, pady=(5,0))
+        labels_frame.pack(fill=tk.X, pady=5)
         ttk.Label(labels_frame, textvariable=self.intro_path, wraplength=280, style="TLabelframe.Label").pack(side=tk.LEFT, expand=True, padx=5)
         ttk.Label(labels_frame, textvariable=self.background_path, wraplength=280, style="TLabelframe.Label").pack(side=tk.LEFT, expand=True, padx=5)
         ttk.Label(labels_frame, textvariable=self.outro_path, wraplength=280, style="TLabelframe.Label").pack(side=tk.LEFT, expand=True, padx=5)
@@ -184,11 +217,20 @@ class MemeCompilerApp(tk.Tk):
 
     def search_worker(self):
         try:
+            # Clean up previous search's thumbnail directory if it exists
+            if self.thumbnail_dir and os.path.exists(self.thumbnail_dir):
+                shutil.rmtree(self.thumbnail_dir)
+
             client_id = self.client_id_var.get()
             client_secret = self.client_secret_var.get()
             user_agent = self.user_agent_var.get()
             reddit = get_reddit_instance(client_id, client_secret, user_agent)
-            self.found_memes = find_memes(reddit, self.keyword_var.get())
+            self.found_memes, self.thumbnail_dir = find_memes(reddit, self.keyword_var.get())
+
+            # Add a selection variable to each meme
+            for meme in self.found_memes:
+                meme['selected'] = tk.BooleanVar(value=False)
+
             self.after(0, self.update_results_list)
         except (ValueError, praw.exceptions.PRAWException) as e:
             logging.error("Failed to search for memes.", exc_info=True)
@@ -198,18 +240,54 @@ class MemeCompilerApp(tk.Tk):
             self.after(0, lambda: self.search_button.config(state=tk.NORMAL))
 
     def update_results_list(self):
+        # Clear previous results
+        for widget in self.results_frame.scrollable_frame.winfo_children():
+            widget.destroy()
+
         if self.found_memes:
-            for meme in self.found_memes:
-                self.results_listbox.insert(tk.END, f"({meme['upvotes']}) {meme['title']}")
-            self.status_var.set(f"Found {len(self.found_memes)} memes. Select 6-7 to continue.")
+            self.status_var.set(f"Found {len(self.found_memes)} memes. Select which to include.")
+
+            for i, meme in enumerate(self.found_memes):
+                card = ttk.Frame(self.results_frame.scrollable_frame, padding=5, style="TLabelframe")
+                card.pack(fill=tk.X, pady=5, padx=5)
+
+                # Thumbnail
+                try:
+                    img = Image.open(meme['thumbnail_path'])
+                    img.thumbnail((150, 150))
+                    meme['image'] = ImageTk.PhotoImage(img) # Keep a reference
+
+                    thumb_label = ttk.Label(card, image=meme['image'])
+                    thumb_label.pack(side=tk.LEFT, padx=5)
+                except Exception as e:
+                    logging.error(f"Failed to create thumbnail for {meme['thumbnail_path']}", exc_info=True)
+                    # Add a placeholder
+                    thumb_label = ttk.Label(card, text="[Image\nError]", style="TLabel")
+                    thumb_label.pack(side=tk.LEFT, padx=5, ipadx=10, ipady=10)
+
+                # Details Frame
+                details_frame = ttk.Frame(card)
+                details_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+
+                title_label = ttk.Label(details_frame, text=f"({meme['upvotes']}) {meme['title']}", wraplength=500, justify=tk.LEFT, style="TLabelframe.Label")
+                title_label.pack(anchor='nw', fill=tk.X)
+
+                subreddit_label = ttk.Label(details_frame, text=f"r/{meme['subreddit']}", style="TLabel")
+                subreddit_label.pack(anchor='nw', fill=tk.X)
+
+                # Selection Checkbox
+                select_check = ttk.Checkbutton(card, variable=meme['selected'], text="Include", command=self.check_compilation_readiness)
+                select_check.pack(side=tk.RIGHT, padx=5)
+
             self.results_group.pack(fill=tk.BOTH, expand=True, pady=5, padx=10)
-            self.video_group.pack(fill=tk.X, pady=5, padx=10) # Show video selection
+            self.video_group.pack(fill=tk.X, pady=5, padx=10)
         else:
             self.status_var.set(f"No memes found for '{self.keyword_var.get()}'. Try another keyword.")
+
         self.check_compilation_readiness()
 
     def check_compilation_readiness(self, event=None):
-        memes_selected = len(self.results_listbox.curselection()) > 0
+        memes_selected = any(meme['selected'].get() for meme in self.found_memes)
         videos_selected = all([self.intro_path.get(), self.outro_path.get(), self.background_path.get()])
 
         if memes_selected and videos_selected:
@@ -218,12 +296,11 @@ class MemeCompilerApp(tk.Tk):
             self.compile_group.pack_forget()
 
     def start_compilation(self):
-        selected_indices = self.results_listbox.curselection()
-        if not selected_indices:
+        selected_memes = [meme for meme in self.found_memes if meme['selected'].get()]
+
+        if not selected_memes:
             messagebox.showerror("Error", "No memes selected.")
             return
-
-        selected_memes = [self.found_memes[i] for i in selected_indices]
 
         output_path = filedialog.asksaveasfilename(defaultextension=".mp4", filetypes=[("MP4 Video", "*.mp4")])
         if not output_path:
@@ -275,22 +352,22 @@ class MemeCompilerApp(tk.Tk):
     def _create_settings_tab(self, parent):
         # --- Reddit API Settings ---
         api_group = ttk.LabelFrame(parent, text="Reddit API Credentials", padding="10")
-        api_group.pack(fill=tk.X, pady=5)
+        api_group.pack(fill=tk.X, pady=5, padx=5)
 
-        ttk.Label(api_group, text="Client ID:").grid(row=0, column=0, sticky='w', pady=2)
-        ttk.Entry(api_group, textvariable=self.client_id_var, width=60).grid(row=0, column=1, sticky='we', pady=2)
+        ttk.Label(api_group, text="Client ID:").grid(row=0, column=0, sticky='w', pady=5, padx=5)
+        ttk.Entry(api_group, textvariable=self.client_id_var, width=60).grid(row=0, column=1, sticky='we', pady=5, padx=5)
 
-        ttk.Label(api_group, text="Client Secret:").grid(row=1, column=0, sticky='w', pady=2)
-        ttk.Entry(api_group, textvariable=self.client_secret_var, width=60, show="*").grid(row=1, column=1, sticky='we', pady=2)
+        ttk.Label(api_group, text="Client Secret:").grid(row=1, column=0, sticky='w', pady=5, padx=5)
+        ttk.Entry(api_group, textvariable=self.client_secret_var, width=60, show="*").grid(row=1, column=1, sticky='we', pady=5, padx=5)
 
-        ttk.Label(api_group, text="User Agent:").grid(row=2, column=0, sticky='w', pady=2)
-        ttk.Entry(api_group, textvariable=self.user_agent_var, width=60).grid(row=2, column=1, sticky='we', pady=2)
+        ttk.Label(api_group, text="User Agent:").grid(row=2, column=0, sticky='w', pady=5, padx=5)
+        ttk.Entry(api_group, textvariable=self.user_agent_var, width=60).grid(row=2, column=1, sticky='we', pady=5, padx=5)
 
         api_group.columnconfigure(1, weight=1)
 
         # --- Action Buttons ---
         button_frame = ttk.Frame(parent, style="TLabelframe")
-        button_frame.pack(pady=15, fill=tk.X, ipady=5)
+        button_frame.pack(pady=20, padx=5, fill=tk.X, ipady=5)
 
         self.test_button = ttk.Button(button_frame, text="Test Credentials", command=self.start_test_credentials)
         self.test_button.pack(side=tk.RIGHT, padx=(10, 0))

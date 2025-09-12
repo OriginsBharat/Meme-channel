@@ -1,6 +1,8 @@
 import praw
 import os
 import logging
+import tempfile
+from .utils import download_file
 
 
 def get_reddit_instance(client_id, client_secret, user_agent):
@@ -41,37 +43,48 @@ def find_memes(reddit, keyword, limit=25, min_upvotes=500):
     memes = []
     logging.info(f"Starting meme search for keyword: '{keyword}' with limit={limit}, min_upvotes={min_upvotes}")
 
-    # Search for subreddits related to the keyword
+    # Create a single temporary directory for all thumbnails for this search
+    temp_dir = tempfile.mkdtemp(prefix="meme-compiler-")
+    logging.info(f"Created temporary directory for thumbnails: {temp_dir}")
+
     try:
         subreddits = [subreddit.display_name for subreddit in reddit.subreddits.search(keyword, limit=5)]
         if not subreddits:
             logging.warning(f"No subreddits found for keyword: {keyword}")
-            return []
+            return [], temp_dir
 
         logging.info(f"Found subreddits: {', '.join(subreddits)}")
 
         for sub_name in subreddits:
             subreddit = reddit.subreddit(sub_name)
-            # Get top posts from the last week
             hot_posts = subreddit.hot(limit=limit)
 
             for post in hot_posts:
                 if post.score >= min_upvotes and not post.is_self and not post.stickied:
-                    # Check if it's an image or a reddit-hosted video
-                    if post.url.endswith(('.jpg', '.jpeg', '.png', '.gif')) or 'v.redd.it' in post.url:
-                        memes.append({
-                            "title": post.title,
-                            "url": post.url,
-                            "subreddit": sub_name,
-                            "upvotes": post.score
-                        })
-                        logging.info(f"Found meme: '{post.title}' ({post.score} upvotes) in r/{sub_name}")
+                    is_image = post.url.endswith(('.jpg', '.jpeg', '.png'))
+                    is_gif = post.url.endswith('.gif')
+
+                    if is_image or is_gif:
+                        thumbnail_path = download_file(post.url, temp_dir)
+                        if thumbnail_path:
+                            memes.append({
+                                "title": post.title,
+                                "url": post.url,
+                                "subreddit": sub_name,
+                                "upvotes": post.score,
+                                "thumbnail_path": thumbnail_path,
+                                "is_video": is_gif # Treat gifs as videos
+                            })
+                            logging.info(f"Found and downloaded meme: '{post.title}'")
+                        else:
+                            logging.warning(f"Failed to download meme: {post.title} from {post.url}")
 
     except praw.exceptions.PRAWException as e:
         logging.error(f"A PRAW-related error occurred during Reddit search for keyword '{keyword}'", exc_info=True)
 
     logging.info(f"Found a total of {len(memes)} memes.")
-    return memes
+    # Return the temp directory path so it can be cleaned up later
+    return memes, temp_dir
 
 if __name__ == '__main__':
     # This is for testing the scraper directly.
@@ -86,13 +99,17 @@ if __name__ == '__main__':
         try:
             reddit = get_reddit_instance(client_id, client_secret, user_agent)
             keyword_to_search = "memes"
-            found_memes = find_memes(reddit, keyword_to_search)
+            found_memes, temp_dir = find_memes(reddit, keyword_to_search)
 
             if found_memes:
                 print(f"\nFound {len(found_memes)} memes for '{keyword_to_search}':")
                 for meme in found_memes:
-                    print(f"- {meme['title']} ({meme['url']})")
+                    print(f"- {meme['title']} ({meme['url']}) -> {meme['thumbnail_path']}")
             else:
                 print(f"No memes found for '{keyword_to_search}'.")
         except Exception as e:
             print(f"An error occurred during testing: {e}")
+        finally:
+            if 'temp_dir' in locals() and os.path.exists(temp_dir):
+                print(f"Cleaning up temporary directory: {temp_dir}")
+                shutil.rmtree(temp_dir)

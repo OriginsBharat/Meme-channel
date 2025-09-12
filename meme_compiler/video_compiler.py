@@ -1,5 +1,3 @@
-import requests
-import os
 import logging
 import tempfile
 from moviepy.editor import *
@@ -8,21 +6,7 @@ import shutil
 import requests
 import os
 from .tts_processor import extract_text_from_image, generate_tts_audio, is_tesseract_installed
-
-def download_file(url, folder):
-    """Downloads a file from a URL to a local folder."""
-    try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        filename = os.path.join(folder, os.path.basename(urlparse(url).path))
-        with open(filename, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        logging.info(f"Successfully downloaded {url} to {filename}")
-        return filename
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error downloading {url}", exc_info=True)
-        return None
+from .utils import download_file
 
 def create_video(selected_memes, intro_path, outro_path, background_path, output_path="final_video.mp4", enable_tts=False, voice_id=None, progress_callback=None):
     """
